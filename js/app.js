@@ -1699,6 +1699,17 @@ function bindEvents() {
     const valor = parseFloat($('#draw-valor').value) || 0;
     state.drawConfig.valor = valor;
     state.drawConfig.participantes = Array.from(state.selectedParticipants);
+
+    // Desenha a pré-visualização da roleta com os participantes selecionados
+    const canvas = $('#roulette-canvas');
+    const ctx = canvas.getContext('2d');
+    const names = state.drawConfig.participantes.map(id => {
+      const u = state.allUsers.find(u => u.id === id);
+      return u ? (u.nick || u.nome) : id;
+    });
+    hide($('#roulette-result'));
+    drawWheel(ctx, canvas, names, 0);
+
     toast('Configuração de sorteio salva!', 'success');
   });
   $('#btn-select-all').addEventListener('click', () => {
