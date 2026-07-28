@@ -1,0 +1,25 @@
+{
+  "name": "radio-pinheirinho-local",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Rádio local com sincronização do Google Drive; usa manifest.json se existir ou varre a pasta pública automaticamente.",
+  "main": "servidor.js",
+  "scripts": {
+    "start": "node servidor.js",
+    "sync": "node atualizador.js"
+  },
+  "config": {
+    "radio": {
+      "port": 3000,
+      "autoOpen": true,
+      "driveFolderId": "1GUVEP3tlgVIe_bSXWwHGWHm_IyfzMIf2",
+      "manifestFileName": "manifest.json",
+      "removeMissing": true,
+      "syncWithoutManifest": true,
+      "fastScan": true,
+      "fullCheck": false,
+      "loja": "Nome da Loja Aqui",
+      "painelUrl": "COLE_AQUI_A_URL_DO_WEB_APP_DO_PAINEL"
+    }
+  }
+}
