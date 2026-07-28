@@ -16,7 +16,7 @@ if errorlevel 1 (
 :: codigo antigo/quebrado, entao sempre funciona). Troque SEU_ID_AQUI
 :: pelo ID do arquivo atualizador.js publico no Drive.
 set ATUALIZADOR_FILE_ID=SEU_ID_AQUI
-if not "%ATUALIZADOR_FILE_ID%"=="https://drive.google.com/drive/u/1/folders/1drLc0oVjcs-3ohB0o9xrCpvlS2Bai2UI" (
+if not "%ATUALIZADOR_FILE_ID%"=="https://drive.google.com/file/d/1vXZU3mZRD4bOK6VEKlopsn1bL4v_80Ah/view?usp=sharing" (
   echo Verificando atualizador.js...
   powershell -NoProfile -Command ^
     "try { Invoke-WebRequest -Uri 'https://drive.usercontent.google.com/download?id=%ATUALIZADOR_FILE_ID%&export=download' -OutFile 'atualizador.js.new' -UseBasicParsing; if ((Get-Item 'atualizador.js.new').Length -gt 0) { Move-Item -Force 'atualizador.js.new' 'atualizador.js' } } catch { Write-Host 'Falha ao verificar atualizador.js, seguindo com a versao local.' }"
