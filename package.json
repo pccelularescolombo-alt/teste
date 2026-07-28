@@ -19,7 +19,7 @@
       "fastScan": true,
       "fullCheck": false,
       "loja": "Nome da Loja Aqui",
-      "painelUrl": "COLE_AQUI_A_URL_DO_WEB_APP_DO_PAINEL"
+      "painelUrl": "https://script.google.com/macros/s/AKfycbwbZxSB0xzp-fzgA-aLjMBD8K5azAohjPyWGrvnfCjRMBwURSjRrRB9h0sWXsrCGW5qEw/exec"
     }
   }
 }
