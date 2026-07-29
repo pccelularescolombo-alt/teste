@@ -18,8 +18,8 @@
       "syncWithoutManifest": true,
       "fastScan": true,
       "fullCheck": false,
-      "loja": "Nome da Loja Aqui",
-      "painelUrl": "https://script.google.com/macros/s/AKfycbwbZxSB0xzp-fzgA-aLjMBD8K5azAohjPyWGrvnfCjRMBwURSjRrRB9h0sWXsrCGW5qEw/exec"
+      "loja": "Teste",
+      "painelUrl": "https://script.google.com/macros/s/AKfycbyoCu69InjjpA9WjYCSRiRzbCvm14j74vAd_f1TW3FDhxDx33iDPZmWZfHyEVQNqTv0HQ/exec"
     }
   }
 }
