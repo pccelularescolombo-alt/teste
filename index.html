@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Registro de Metas e Resultados</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">Carregando dados...</div>
+    </div>
+    <div class="container">
+        <header>
+            <h1>📊 Sistema de Registro de Metas e Resultados</h1>
+            <div class="header-info">
+                <div class="metas-info">
+                    <div class="meta-item">
+                        <i class="fas fa-store"></i>
+                        <div>
+                            <span>Loja</span>
+                            <strong id="lojaNomeHeader">Minha Loja</strong>
+                        </div>
+                    </div>
+                    <div class="meta-item">
+                        <i class="fas fa-gift"></i>
+                        <div>
+                            <span>Meta Cashback</span>
+                            <div style="display: flex; align-items: baseline; gap: 6px;">
+                                <strong id="metaCashbackHeader">100</strong>
+                                <span id="metaCashbackPctHeader" style="font-size: 0.8rem; color: var(--primary); font-weight: 600;">(0%)</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="meta-item">
+                        <i class="fas fa-star"></i>
+                        <div>
+                            <span>Meta Avaliações</span>
+                            <div style="display: flex; align-items: baseline; gap: 6px;">
+                                <strong id="metaAvaliacoesHeader">15</strong>
+                                <span id="metaAvaliacoesPctHeader" style="font-size: 0.8rem; color: var(--primary); font-weight: 600;">(0%)</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <button id="abrirConfig" class="btn btn-secondary">
+                        <i class="fas fa-cog"></i> Configurar Loja
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <div class="main-content">
+            <div class="card">
+                <h2>📝 Registrar Dados do Dia</h2>
+                <form id="registroForm">
+                    <div class="form-group">
+                        <label for="dataRegistro">📅 Data</label>
+                        <input type="date" id="dataRegistro" required>
+                    </div>
+
+                    <!-- Passo 1 -->
+                    <div id="passo1">
+                        <div class="form-group">
+                            <label>👤 Passo 1 — Selecione o Funcionário</label>
+                            <div style="display: flex; gap: 8px; margin-bottom: 10px;">
+                                <button type="button" class="btn btn-primary btn-small" onclick="abrirAdicionarVendedorModal()">
+                                    <i class="fas fa-user-plus"></i> Novo Funcionário
+                                </button>
+                            </div>
+                            <div id="vendedoresGrid" class="vendedores-grid"></div>
+                            <input type="hidden" id="vendedorSelecionado" required>
+                        </div>
+                    </div>
+
+                    <!-- Passo 2 -->
+                    <div id="passo2" style="display:none;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                            <h3 style="color:#1f2937; margin:0; font-size:1.05rem;">✅ Passo 2 — Afazeres e Resultados</h3>
+                            <button type="button" id="btnVoltarPasso1" class="btn btn-secondary btn-small">
+                                <i class="fas fa-arrow-left"></i> Voltar
+                            </button>
+                        </div>
+
+                        <div class="form-group">
+                            <label>📋 Selecione dos cadastrados</label>
+                            <div style="position: relative; margin-bottom: 10px;">
+                                <input type="text" id="pesquisaAfazeres" placeholder="🔍 Pesquisar afazeres..." style="width: 100%; padding: 10px 12px 10px 36px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.9rem;">
+                                <i class="fas fa-search" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-muted); pointer-events: none;"></i>
+                            </div>
+                            <div id="afazeresCheckboxes"></div>
+                            <div class="afazeres-summary">
+                                <span><span class="count" id="afazeresSelCount">0</span> selecionado(s)</span>
+                                <span id="afazeresTotalLabel">0 disponíveis</span>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="tarefaAvulsa">➕ Adicionar tarefa avulsa</label>
+                            <div style="display:flex; gap:8px;">
+                                <input type="text" id="tarefaAvulsa" placeholder="Digite uma tarefa extra...">
+                                <button type="button" id="btnAddAvulsa" class="btn btn-secondary">
+                                    <i class="fas fa-plus"></i>
+                                </button>
+                            </div>
+                            <div id="avulsasList" style="margin-top:10px; display:flex; flex-direction:column; gap:6px;"></div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="cashback">🎁 Quantidade de Cashback</label>
+                            <input type="number" id="cashback" min="0" required placeholder="0" value="0">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="avaliacoes">⭐ Quantidade de Avaliações</label>
+                            <input type="number" id="avaliacoes" min="0" required placeholder="0" value="0">
+                        </div>
+
+                        <button type="submit" class="btn btn-primary" style="width: 100%;">
+                            💾 Salvar Dados do Dia
+                        </button>
+                    </div>
+
+                    <!-- Tela de Sucesso -->
+                    <div id="telaSucesso" style="display:none; text-align:center; padding: 40px 20px;">
+                        <div style="font-size: 4rem; color: var(--success); margin-bottom: 15px; animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);">
+                            <i class="fas fa-check-circle"></i>
+                        </div>
+                        <h3 style="color: var(--text); margin-bottom: 8px;">Registrado com Sucesso!</h3>
+                        <p style="color: var(--text-muted);">Os dados foram salvos e as tarefas estão pendentes de aprovação.</p>
+                    </div>
+                </form>
+            </div>
+
+            <div class="card">
+                <h2>📅 Resumo de Hoje</h2>
+                <div id="resumoHoje"></div>
+            </div>
+        </div>
+
+        <div id="adminPanel" class="admin-panel card full-width active">
+            <h2>🛠️ Painel de Gestão</h2>
+
+            <button type="button" class="tabs-toggle" id="tabsToggle" aria-label="Abrir menu de seções">
+                <span><i class="fas fa-bars"></i> &nbsp; <span id="tabsToggleLabel">Menu de Seções</span></span>
+                <i class="fas fa-chevron-right"></i>
+            </button>
+            <div class="tabs-overlay" id="tabsOverlay"></div>
+
+            <div class="tabs" id="adminTabs">
+                <button type="button" class="tabs-close" id="tabsClose" aria-label="Fechar menu">&times;</button>
+                <div class="tab active" data-tab="dashboardEnc">
+                    📋 Dashboard Encarregado
+                </div>
+                <div class="tab" data-tab="cadastroAfazeres">
+                    ➕ Cadastrar Afazeres
+                </div>
+                <div class="tab" data-tab="tarefas">
+                    ✅ Tarefas Lançadas
+                </div>
+                <div class="tab" data-tab="relatorios">
+                    📊 Relatórios
+                </div>
+                <div class="tab" data-tab="gerenciar">
+                    ✏️ Gerenciar Dados
+                </div>
+                <div class="tab" data-tab="graficos">
+                    📈 Gráficos
+                </div>
+            </div>
+
+            <div id="cadastroAfazeres" class="tab-content">
+                <button id="adicionarAfazerCadastro" class="btn btn-primary" style="margin-bottom: 20px;">
+                    ➕ Adicionar Afazer
+                </button>
+                <p style="color:#6b7280; margin-bottom:15px;">📌 Afazeres recorrentes ficam disponíveis no formulário diário do funcionário.</p>
+                <div id="afazeresCadastroLista"></div>
+            </div>
+
+            <div id="dashboardEnc" class="tab-content active">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px;">
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label for="dashboardData">Data do Relatório</label>
+                        <input type="date" id="dashboardData">
+                    </div>
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label style="opacity: 0;">.</label>
+                        <button id="atualizarDashboard" class="btn btn-primary" style="width: 100%;">
+                            <i class="fas fa-sync-alt"></i>
+                            Atualizar Dashboard
+                        </button>
+                    </div>
+                </div>
+                <div id="dashboardEncResultado"></div>
+            </div>
+
+            <div id="tarefas" class="tab-content">
+                <button id="adicionarTarefa" class="btn btn-primary" style="margin-bottom: 20px;">
+                    <i class="fas fa-plus"></i>
+                    Adicionar Nova Tarefa
+                </button>
+                <div class="form-group">
+                    <label for="filtroTarefaVendedor">Filtrar por Funcionário</label>
+                    <select id="filtroTarefaVendedor">
+                        <option value="">Todos</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="filtroTarefaData">Filtrar por Data</label>
+                    <input type="date" id="filtroTarefaData">
+                </div>
+                <div id="tarefasLista"></div>
+            </div>
+
+            <div id="relatorios" class="tab-content">
+                <div class="form-group">
+                    <label for="vendedorRelatorio">Vendedor (opcional para relatório individual)</label>
+                    <select id="vendedorRelatorio">
+                        <option value="">Todos os Vendedores</option>
+                    </select>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px;">
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label for="dataRelatorio">Data do Relatório</label>
+                        <input type="date" id="dataRelatorio">
+                    </div>
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label style="opacity: 0;">.</label>
+                        <button id="gerarRelatorio" class="btn btn-primary" style="width: 100%;">
+                            <i class="fas fa-file-alt"></i>
+                            Gerar Relatório
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Status do Funcionário (Falta / Atestado) -->
+                <div id="funcionarioStatusSection" style="margin-bottom: 20px; padding: 16px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm);">
+                    <h4 style="margin-bottom: 12px; font-size: 0.95rem; font-weight: 600; color: var(--text);">
+                        <i class="fas fa-user-check"></i> Status do Funcionário no Dia
+                    </h4>
+                    <p style="color: var(--text-muted); font-size: 0.82rem; margin-bottom: 12px;">
+                        Marque funcionários que faltaram ou tiveram atestado na data selecionada.
+                    </p>
+                    <div id="funcionarioStatusLista" style="display: flex; flex-direction: column; gap: 8px;"></div>
+                </div>
+
+                <div id="relatorioResultado"></div>
+                <div class="form-group" style="margin-top: 20px;">
+                    <label for="observacaoRelatorio">📝 Observação do Relatório</label>
+                    <textarea id="observacaoRelatorio" rows="4" placeholder="Digite uma observação para adicionar ao final do relatório..." style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-elev); color: var(--text); font-size: 0.95rem; font-family: inherit; resize: vertical;"></textarea>
+                    <button type="button" class="btn btn-primary" style="margin-top: 10px;" onclick="adicionarObservacaoRelatorio()">
+                        <i class="fas fa-plus"></i> Adicionar Observação ao Relatório
+                    </button>
+                </div>
+            </div>
+
+            <div id="gerenciar" class="tab-content">
+                <div class="form-group">
+                    <label for="filtroVendedor">Filtrar por Vendedor</label>
+                    <select id="filtroVendedor">
+                        <option value="">Todos</option>
+                    </select>
+                </div>
+                <div id="gerenciarLista"></div>
+            </div>
+
+            <div id="graficos" class="tab-content">
+                <div class="form-group">
+                    <label for="mesGrafico">Selecione o Mês</label>
+                    <input type="month" id="mesGrafico">
+                </div>
+                <button id="gerarGraficos" class="btn btn-primary" style="margin-bottom: 20px;">
+                    <i class="fas fa-chart-line"></i>
+                    Gerar Gráficos
+                </button>
+                <div id="graficosContainer"></div>
+
+                <!-- Novo gráfico: Análise por Funcionário -->
+                <div style="margin-top: 40px; padding-top: 30px; border-top: 2px solid var(--border);">
+                    <h3 style="color: var(--text); font-size: 1.1rem; font-weight: 600; margin-bottom: 20px;">
+                        📊 Análise de Tarefas por Funcionário (Últimas 4 Semanas)
+                    </h3>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px;">
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label for="vendedorGraficoTarefas">Selecione o Funcionário</label>
+                            <select id="vendedorGraficoTarefas">
+                                <option value="">Selecione um funcionário...</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label style="opacity: 0;">.</label>
+                            <button id="gerarGraficoTarefas" class="btn btn-primary" style="width: 100%;">
+                                <i class="fas fa-chart-bar"></i>
+                                Gerar Análise de Tarefas
+                            </button>
+                        </div>
+                    </div>
+                    <div id="graficoTarefasContainer"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Configurações da Loja -->
+    <div id="configModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>⚙️ Configurações da Loja</h3>
+                <button class="close-modal" onclick="closeConfigModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form id="configForm">
+                <div class="form-group">
+                    <label for="lojaNome">🏪 Nome da Loja</label>
+                    <input type="text" id="lojaNome" required placeholder="Ex: Loja Centro">
+                </div>
+                <div class="form-group">
+                    <label for="metaCashback">🎁 Meta Mensal Total de Cashback</label>
+                    <input type="number" id="metaCashback" min="1" required placeholder="Ex: 100">
+                </div>
+                <div class="form-group">
+                    <label for="metaAvaliacoes">⭐ Meta Mensal Total de Avaliações</label>
+                    <input type="number" id="metaAvaliacoes" min="1" required placeholder="Ex: 15">
+                </div>
+                <button type="submit" class="btn btn-primary" style="width: 100%;">
+                    💾 Salvar
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Editar Funcionário -->
+    <div id="editarVendedorModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>✏️ Editar Funcionário</h3>
+                <button class="close-modal" onclick="closeEditarVendedorModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form id="editarVendedorForm">
+                <input type="hidden" id="editarVendedorId">
+                <div class="form-group">
+                    <label for="editarVendedorNome">👤 Nome</label>
+                    <input type="text" id="editarVendedorNome" required placeholder="Nome do funcionário" maxlength="40">
+                </div>
+                <div class="form-group">
+                    <label for="editarVendedorCor">🎨 Cor</label>
+                    <input type="color" id="editarVendedorCor" style="width:60px; height:40px; padding:2px; cursor:pointer;">
+                </div>
+                <div style="display:flex; gap:8px;">
+                    <button type="submit" class="btn btn-primary" style="flex:1;">
+                        💾 Salvar
+                    </button>
+                    <button type="button" class="btn btn-secondary" onclick="closeEditarVendedorModal()">
+                        Cancelar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Adicionar Funcionário -->
+    <div id="adicionarVendedorModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>➕ Adicionar Funcionário</h3>
+                <button class="close-modal" onclick="closeAdicionarVendedorModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form id="adicionarVendedorForm">
+                <div class="form-group">
+                    <label for="novoVendedorNome">👤 Nome</label>
+                    <input type="text" id="novoVendedorNome" required placeholder="Nome do funcionário" maxlength="40">
+                </div>
+                <div class="form-group">
+                    <label for="novoVendedorCor">🎨 Cor</label>
+                    <input type="color" id="novoVendedorCor" value="#6366f1" style="width:60px; height:40px; padding:2px; cursor:pointer;">
+                </div>
+                <div class="form-group">
+                    <label for="novoVendedorIcone">🎭 Ícone</label>
+                    <select id="novoVendedorIcone" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.95rem;">
+                        <option value="fa-user">👤 Usuário</option>
+                        <option value="fa-user-tie">👔 Formal</option>
+                        <option value="fa-user-ninja">🥷 Ninja</option>
+                        <option value="fa-user-astronaut">👨‍🚀 Astronauta</option>
+                        <option value="fa-user-secret">🕵️ Agente</option>
+                        <option value="fa-user-graduate">🎓 Graduado</option>
+                        <option value="fa-user-cog">⚙️ Técnico</option>
+                        <option value="fa-user-check">✅ Verificado</option>
+                    </select>
+                </div>
+                <div style="display:flex; gap:8px;">
+                    <button type="submit" class="btn btn-primary" style="flex:1;">
+                        💾 Adicionar
+                    </button>
+                    <button type="button" class="btn btn-secondary" onclick="closeAdicionarVendedorModal()">
+                        Cancelar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Cadastrar Afazer (template) -->
+    <div id="afazerCadastroModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="afazerCadastroModalTitle">➕ Cadastrar Afazer</h3>
+                <button class="close-modal" onclick="closeAfazerCadastroModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form id="afazerCadastroForm">
+                <input type="hidden" id="afazerCadastroId">
+                <div class="form-group">
+                    <label for="afazerCadastroDescricao">📝 Descrição</label>
+                    <input type="text" id="afazerCadastroDescricao" required placeholder="Ex: Organizar prateleira A1">
+                </div>
+                <div class="form-group">
+                    <label for="afazerCadastroRecorrencia">🔁 Recorrência</label>
+                    <select id="afazerCadastroRecorrencia" required>
+                        <option value="diaria">📅 Diária (todo dia)</option>
+                        <option value="semanal">🗓️ Semanal (escolher dias)</option>
+                        <option value="avulsa">🔹 Avulsa (sem recorrência)</option>
+                    </select>
+                </div>
+                <div class="form-group" id="afazerDiasSemanaGroup" style="display:none;">
+                    <label>📌 Dias da semana</label>
+                    <div id="diasSemanaChecks" style="display:flex; flex-wrap:wrap; gap:10px;"></div>
+                </div>
+                <button type="submit" class="btn btn-primary" style="width: 100%;">
+                    💾 Salvar
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Adicionar/Editar Tarefa -->
+    <div id="tarefaModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="tarefaModalTitle">Adicionar Tarefa</h3>
+                <button class="close-modal" onclick="closeTarefaModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form id="tarefaForm">
+                <input type="hidden" id="tarefaId">
+                <div class="form-group">
+                    <label for="tarefaVendedor">Funcionário</label>
+                    <select id="tarefaVendedor" required></select>
+                </div>
+                <div class="form-group">
+                    <label for="tarefaData">Data</label>
+                    <input type="date" id="tarefaData" required>
+                </div>
+                <div class="form-group">
+                    <label for="tarefaDescricao">Descrição do Afazer</label>
+                    <select id="tarefaDescricao" required>
+                        <option value="">Selecione um afazer...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="tarefaStatus">Status</label>
+                    <select id="tarefaStatus" required>
+                        <option value="pendente">Pendente</option>
+                        <option value="em_andamento">Em andamento</option>
+                        <option value="concluido">Concluído</option>
+                        <option value="nao_realizado">Não realizado</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-primary" style="width: 100%;">
+                    <i class="fas fa-save"></i>
+                    Salvar
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Editar Registro -->
+    <div id="editarRegistroModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Editar Registro</h3>
+                <button class="close-modal" onclick="closeEditarRegistroModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form id="editarRegistroForm">
+                <input type="hidden" id="editarRegistroId">
+                <div class="form-group">
+                    <label for="editarData">Data</label>
+                    <input type="date" id="editarData" required>
+                </div>
+                <div class="form-group">
+                    <label for="editarCashback">Cashback</label>
+                    <input type="number" id="editarCashback" min="0" required>
+                </div>
+                <div class="form-group">
+                    <label for="editarAvaliacoes">Avaliações</label>
+                    <input type="number" id="editarAvaliacoes" min="0" required>
+                </div>
+                <button type="submit" class="btn btn-primary" style="width: 100%;">
+                    <i class="fas fa-save"></i>
+                    Salvar Alterações
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Toast container -->
+    <div id="toastContainer"></div>
+
+    <!-- Modal de confirmação -->
+    <div id="confirmModal" class="modal">
+        <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-header">
+                <h3 id="confirmTitle">Confirmar</h3>
+                <button class="close-modal" onclick="closeConfirm(false)">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <p id="confirmMessage" style="color: var(--text-muted); margin-bottom: 20px; font-size: 0.95rem;"></p>
+            <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                <button class="btn btn-secondary" onclick="closeConfirm(false)">Cancelar</button>
+                <button class="btn btn-danger" id="confirmOkBtn" onclick="closeConfirm(true)">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Senha de Acesso -->
+    <div id="senhaAbaModal" class="modal">
+        <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-header">
+                <h3>🔒 Acesso Restrito</h3>
+                <button class="close-modal" onclick="closeSenhaAbaModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="form-group">
+                <label for="senhaAbaInput">Digite a senha de administrador</label>
+                <input type="password" id="senhaAbaInput" placeholder="Senha" style="width: 100%;">
+            </div>
+            <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                <button class="btn btn-secondary" onclick="closeSenhaAbaModal()">Cancelar</button>
+                <button class="btn btn-primary" onclick="verificarSenhaAba()">Acessar</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
