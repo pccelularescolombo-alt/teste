@@ -1,2329 +1,1642 @@
-        // ============================
-        // CONFIGURAÇÃO FIREBASE
-        // ============================
-        const firebaseConfig = {
-            apiKey: "AIzaSyCb3gYoh9T2wUuRXF486lFmcYz75mIfJeo",
-            authDomain: "metas-loja-60456.firebaseapp.com",
-            projectId: "metas-loja-60456",
-            storageBucket: "metas-loja-60456.firebasestorage.app",
-            messagingSenderId: "437882305073",
-            appId: "1:437882305073:web:68c9ec94461b1abf53f310"
-        };
-
-        // Inicializar Firebase
-        firebase.initializeApp(firebaseConfig);
-        const db = firebase.firestore();
-
-        // Configurações e dados iniciais
-        const DIAS_SEMANA = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
-        const SENHA_SISTEMA = "admin123";
-        const DIAS_LIMPEZA_AUTOMATICA = 180;
-
-        let metaCashback = 100;
-        let metaAvaliacoes = 15;
-        let vendedores = [];
-        let registros = [];
-        let tarefas = [];
-        let afazeresCadastrados = [];
-        let lojaNome = 'Minha Loja';
-        let avulsasTemp = [];
-        let gerenciarDesbloqueado = false;
-        let tarefasDesbloqueado = false;
-        let dadosCarregados = false;
-        let afazeresSelecionados = new Set(); // Track selected afazeres across re-renders
-        let observacoes = []; // Observações do relatório por data
-        let funcionarioStatus = []; // Status do funcionário por dia: { id, data, vendedorId, status: 'falta'|'atestado' }
-
-        // ============================
-        // UI helpers (toast + confirm)
-        // ============================
-        function showToast(msg, type = 'success') {
-            const c = document.getElementById('toastContainer');
-            if (!c) return;
-            const t = document.createElement('div');
-            t.className = 'toast ' + type;
-            t.textContent = msg;
-            c.appendChild(t);
-            setTimeout(() => {
-                t.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
-                t.style.opacity = '0';
-                t.style.transform = 'translateX(20px)';
-                setTimeout(() => t.remove(), 300);
-            }, 2600);
-        }
-
-        let _confirmResolve = null;
-        function customConfirm(message, title = 'Confirmar') {
-            return new Promise((resolve) => {
-                _confirmResolve = resolve;
-                document.getElementById('confirmTitle').textContent = title;
-                document.getElementById('confirmMessage').textContent = message;
-                document.getElementById('confirmModal').classList.add('active');
-            });
-        }
-        function closeConfirm(result) {
-            document.getElementById('confirmModal').classList.remove('active');
-            if (_confirmResolve) { _confirmResolve(result); _confirmResolve = null; }
-        }
-
-        // ============================
-        // FUNÇÕES FIRESTORE
-        // ============================
-        
-        // Carregar todos os dados do Firestore
-        async function carregarDados() {
-            try {
-                // Carregar configurações (loja, metas)
-                const configDoc = await db.collection('configuracoes').doc('sistema').get();
-                if (configDoc.exists) {
-                    const config = configDoc.data();
-                    lojaNome = config.lojaNome || 'Minha Loja';
-                    metaCashback = config.metaCashback || 100;
-                    metaAvaliacoes = config.metaAvaliacoes || 15;
-                }
-
-                // Carregar vendedores
-                const vendedoresSnapshot = await db.collection('vendedores').get();
-                if (vendedoresSnapshot.empty) {
-                    // Criar vendedores iniciais
-                    vendedores = [
-                        { id: 1, nome: 'Mattheus', cor: '#3498db', icone: 'fa-user-tie' },
-                        { id: 2, nome: 'Kelly', cor: '#e74c3c', icone: 'fa-user-ninja' },
-                        { id: 3, nome: 'Miguel', cor: '#2ecc71', icone: 'fa-user-astronaut' },
-                        { id: 4, nome: 'Allyson', cor: '#f39c12', icone: 'fa-user-secret' }
-                    ];
-                    await salvarVendedores();
-                } else {
-                    vendedores = vendedoresSnapshot.docs.map(doc => ({
-                        id: doc.data().id,
-                        nome: doc.data().nome,
-                        cor: doc.data().cor,
-                        icone: doc.data().icone
-                    }));
-                }
-
-                // Carregar registros
-                const registrosSnapshot = await db.collection('registros').get();
-                registros = registrosSnapshot.docs.map(doc => ({
-                    id: doc.data().id,
-                    data: doc.data().data,
-                    vendedorId: doc.data().vendedorId,
-                    cashback: doc.data().cashback,
-                    avaliacoes: doc.data().avaliacoes,
-                    tarefas: doc.data().tarefas || [],
-                    timestamp: doc.data().timestamp,
-                    criadoEm: doc.data().criadoEm
-                }));
-
-                // Carregar tarefas
-                const tarefasSnapshot = await db.collection('tarefas').get();
-                tarefas = tarefasSnapshot.docs.map(doc => ({
-                    id: doc.data().id,
-                    vendedorId: doc.data().vendedorId,
-                    data: doc.data().data,
-                    descricao: doc.data().descricao,
-                    status: doc.data().status,
-                    timestamp: doc.data().timestamp,
-                    criadoEm: doc.data().criadoEm
-                }));
-
-                // Carregar afazeres cadastrados
-                const afazeresSnapshot = await db.collection('afazeresCadastrados').get();
-                afazeresCadastrados = afazeresSnapshot.docs.map(doc => ({
-                    id: doc.data().id,
-                    descricao: doc.data().descricao,
-                    recorrencia: doc.data().recorrencia,
-                    diasSemana: doc.data().diasSemana || []
-                }));
-
-                // Carregar observações do relatório
-                const observacoesSnapshot = await db.collection('observacoes').get();
-                observacoes = observacoesSnapshot.docs.map(doc => ({
-                    id: doc.data().id,
-                    data: doc.data().data,
-                    texto: doc.data().texto,
-                    timestamp: doc.data().timestamp
-                }));
-
-                // Carregar funcionarioStatus
-                const funcionarioStatusSnapshot = await db.collection('funcionarioStatus').get();
-                funcionarioStatus = funcionarioStatusSnapshot.docs.map(doc => ({
-                    id: doc.data().id,
-                    data: doc.data().data,
-                    vendedorId: doc.data().vendedorId,
-                    status: doc.data().status,
-                    timestamp: doc.data().timestamp
-                }));
-
-                dadosCarregados = true;
-                
-                // Executar limpeza automática ao carregar
-                await limparDadosAntigos();
-                
-            } catch (error) {
-                console.error('Erro ao carregar dados do Firestore:', error);
-                showToast('⚠️ Erro ao carregar dados. Verifique sua conexão.', 'error');
-            }
-        }
-
-        // Salvar configurações
-        async function salvarConfiguracoes() {
-            try {
-                await db.collection('configuracoes').doc('sistema').set({
-                    lojaNome: lojaNome,
-                    metaCashback: metaCashback,
-                    metaAvaliacoes: metaAvaliacoes,
-                    atualizadoEm: firebase.firestore.FieldValue.serverTimestamp()
-                });
-            } catch (error) {
-                console.error('Erro ao salvar configurações:', error);
-                showToast('⚠️ Erro ao salvar configurações.', 'error');
-            }
-        }
-
-        // Salvar vendedores
-        async function salvarVendedores() {
-            try {
-                const batch = db.batch();
-                
-                // Deletar todos os vendedores existentes
-                const snapshot = await db.collection('vendedores').get();
-                snapshot.docs.forEach(doc => {
-                    batch.delete(doc.ref);
-                });
-                
-                // Adicionar novos vendedores
-                vendedores.forEach(v => {
-                    const ref = db.collection('vendedores').doc();
-                    batch.set(ref, {
-                        id: v.id,
-                        nome: v.nome,
-                        cor: v.cor,
-                        icone: v.icone,
-                        atualizadoEm: firebase.firestore.FieldValue.serverTimestamp()
-                    });
-                });
-                
-                await batch.commit();
-            } catch (error) {
-                console.error('Erro ao salvar vendedores:', error);
-                showToast('⚠️ Erro ao salvar vendedores.', 'error');
-            }
-        }
-
-        // Salvar registros
-        async function salvarRegistros() {
-            try {
-                const batch = db.batch();
-                
-                // Deletar todos os registros existentes
-                const snapshot = await db.collection('registros').get();
-                snapshot.docs.forEach(doc => {
-                    batch.delete(doc.ref);
-                });
-                
-                // Adicionar novos registros
-                registros.forEach(r => {
-                    const ref = db.collection('registros').doc();
-                    batch.set(ref, {
-                        id: r.id,
-                        data: r.data,
-                        vendedorId: r.vendedorId,
-                        cashback: r.cashback,
-                        avaliacoes: r.avaliacoes,
-                        tarefas: r.tarefas || [],
-                        timestamp: r.timestamp,
-                        criadoEm: r.criadoEm || firebase.firestore.FieldValue.serverTimestamp()
-                    });
-                });
-                
-                await batch.commit();
-            } catch (error) {
-                console.error('Erro ao salvar registros:', error);
-                showToast('⚠️ Erro ao salvar registros.', 'error');
-            }
-        }
-
-        // Salvar tarefas
-        async function salvarTarefas() {
-            try {
-                const batch = db.batch();
-                
-                // Deletar todas as tarefas existentes
-                const snapshot = await db.collection('tarefas').get();
-                snapshot.docs.forEach(doc => {
-                    batch.delete(doc.ref);
-                });
-                
-                // Adicionar novas tarefas
-                tarefas.forEach(t => {
-                    const ref = db.collection('tarefas').doc();
-                    batch.set(ref, {
-                        id: t.id,
-                        vendedorId: t.vendedorId,
-                        data: t.data,
-                        descricao: t.descricao,
-                        status: t.status,
-                        timestamp: t.timestamp,
-                        criadoEm: t.criadoEm || firebase.firestore.FieldValue.serverTimestamp()
-                    });
-                });
-                
-                await batch.commit();
-            } catch (error) {
-                console.error('Erro ao salvar tarefas:', error);
-                showToast('⚠️ Erro ao salvar tarefas.', 'error');
-            }
-        }
-
-        // Salvar afazeres cadastrados
-        async function salvarAfazeresCadastrados() {
-            try {
-                const batch = db.batch();
-                
-                // Deletar todos os afazeres existentes
-                const snapshot = await db.collection('afazeresCadastrados').get();
-                snapshot.docs.forEach(doc => {
-                    batch.delete(doc.ref);
-                });
-                
-                // Adicionar novos afazeres
-                afazeresCadastrados.forEach(a => {
-                    const ref = db.collection('afazeresCadastrados').doc();
-                    batch.set(ref, {
-                        id: a.id,
-                        descricao: a.descricao,
-                        recorrencia: a.recorrencia,
-                        diasSemana: a.diasSemana || [],
-                        atualizadoEm: firebase.firestore.FieldValue.serverTimestamp()
-                    });
-                });
-                
-                await batch.commit();
-            } catch (error) {
-                console.error('Erro ao salvar afazeres:', error);
-                showToast('⚠️ Erro ao salvar afazeres.', 'error');
-            }
-        }
-
-        // Salvar observações do relatório
-        async function salvarObservacoes() {
-            try {
-                const batch = db.batch();
-
-                // Deletar todas as observações existentes
-                const snapshot = await db.collection('observacoes').get();
-                snapshot.docs.forEach(doc => {
-                    batch.delete(doc.ref);
-                });
-
-                // Adicionar novas observações
-                observacoes.forEach(o => {
-                    const ref = db.collection('observacoes').doc();
-                    batch.set(ref, {
-                        id: o.id,
-                        data: o.data,
-                        texto: o.texto,
-                        timestamp: o.timestamp,
-                        atualizadoEm: firebase.firestore.FieldValue.serverTimestamp()
-                    });
-                });
-
-                await batch.commit();
-            } catch (error) {
-                console.error('Erro ao salvar observações:', error);
-                showToast('⚠️ Erro ao salvar observações.', 'error');
-            }
-        }
-
-        // Salvar funcionarioStatus
-        async function salvarFuncionarioStatus() {
-            try {
-                const batch = db.batch();
-
-                const snapshot = await db.collection('funcionarioStatus').get();
-                snapshot.docs.forEach(doc => {
-                    batch.delete(doc.ref);
-                });
-
-                funcionarioStatus.forEach(fs => {
-                    const ref = db.collection('funcionarioStatus').doc();
-                    batch.set(ref, {
-                        id: fs.id,
-                        data: fs.data,
-                        vendedorId: fs.vendedorId,
-                        status: fs.status,
-                        timestamp: fs.timestamp || new Date().toISOString(),
-                        atualizadoEm: firebase.firestore.FieldValue.serverTimestamp()
-                    });
-                });
-
-                await batch.commit();
-            } catch (error) {
-                console.error('Erro ao salvar funcionarioStatus:', error);
-                showToast('⚠️ Erro ao salvar status do funcionário.', 'error');
-            }
-        }
-
-        // Limpar dados antigos (mais de 180 dias)
-        async function limparDadosAntigos() {
-            try {
-                const dataLimite = new Date();
-                dataLimite.setDate(dataLimite.getDate() - DIAS_LIMPEZA_AUTOMATICA);
-                
-                // Limpar registros antigos
-                const registrosSnapshot = await db.collection('registros')
-                    .where('timestamp', '<', dataLimite.toISOString())
-                    .get();
-                
-                if (!registrosSnapshot.empty) {
-                    const batch = db.batch();
-                    registrosSnapshot.docs.forEach(doc => {
-                        batch.delete(doc.ref);
-                    });
-                    await batch.commit();
-                    
-                    // Atualizar array local
-                    registros = registros.filter(r => {
-                        const rDate = new Date(r.timestamp);
-                        return rDate >= dataLimite;
-                    });
-                    
-                    console.log(`Limpeza: ${registrosSnapshot.size} registros antigos removidos`);
-                }
-                
-                // Limpar tarefas antigas
-                const tarefasSnapshot = await db.collection('tarefas')
-                    .where('timestamp', '<', dataLimite.toISOString())
-                    .get();
-                
-                if (!tarefasSnapshot.empty) {
-                    const batch = db.batch();
-                    tarefasSnapshot.docs.forEach(doc => {
-                        batch.delete(doc.ref);
-                    });
-                    await batch.commit();
-                    
-                    // Atualizar array local
-                    tarefas = tarefas.filter(t => {
-                        const tDate = new Date(t.timestamp);
-                        return tDate >= dataLimite;
-                    });
-                    
-                    console.log(`Limpeza: ${tarefasSnapshot.size} tarefas antigas removidas`);
-                }
-                
-            } catch (error) {
-                console.error('Erro ao limpar dados antigos:', error);
-            }
-        }
-
-        // ============================
-        // INICIALIZAÇÃO
-        // ============================
-        async function init() {
-            try {
-                await carregarDados();
-                setupEventListeners();
-                setDataHoje();
-                document.getElementById('lojaNomeHeader').textContent = lojaNome;
-                atualizarMetasHeader();
-                renderVendedores();
-                atualizarResumoHoje();
-                atualizarSelectsVendedores();
-                popularSelectVendedorGrafico();
-                renderDiasSemanaChecks();
-                renderDashboardEncarregado();
-            } catch (error) {
-                console.error('Erro na inicialização:', error);
-                showToast('⚠️ Erro ao inicializar o sistema.', 'error');
-            } finally {
-                // Esconder loading overlay
-                const overlay = document.getElementById('loadingOverlay');
-                if (overlay) {
-                    overlay.classList.add('hidden');
-                    setTimeout(() => overlay.remove(), 300);
-                }
-            }
-        }
-
-        function setupEventListeners() {
-            // Config loja
-            document.getElementById('abrirConfig').addEventListener('click', () => {
-                document.getElementById('lojaNome').value = lojaNome;
-                document.getElementById('metaCashback').value = metaCashback;
-                document.getElementById('metaAvaliacoes').value = metaAvaliacoes;
-                document.getElementById('configModal').classList.add('active');
-            });
-            document.getElementById('configForm').addEventListener('submit', async (e) => {
-                e.preventDefault();
-                lojaNome = document.getElementById('lojaNome').value.trim() || 'Minha Loja';
-                metaCashback = parseInt(document.getElementById('metaCashback').value) || 100;
-                metaAvaliacoes = parseInt(document.getElementById('metaAvaliacoes').value) || 15;
-                
-                await salvarConfiguracoes();
-                
-                document.getElementById('lojaNomeHeader').textContent = lojaNome;
-                
-                closeConfigModal();
-                showToast('⚙️ Configurações salvas com sucesso!', 'success');
-                atualizarMetasHeader();
-                renderDashboardEncarregado();
-            });
-
-            document.getElementById('registroForm').addEventListener('submit', salvarRegistro);
-            
-            // Botão Voltar para o Passo 1
-            document.getElementById('btnVoltarPasso1').addEventListener('click', () => {
-                document.getElementById('passo2').style.display = 'none';
-                const passo1 = document.getElementById('passo1');
-                passo1.style.display = 'block';
-                passo1.classList.add('fade-in');
-                
-                // Limpar seleção
-                document.querySelectorAll('.vendedor-card').forEach(c => c.classList.remove('selected'));
-                document.getElementById('vendedorSelecionado').value = '';
-                avulsasTemp = [];
-                afazeresSelecionados.clear(); // Limpar seleções de afazeres
-                const pesquisaAfazeres = document.getElementById('pesquisaAfazeres');
-                if (pesquisaAfazeres) pesquisaAfazeres.value = '';
-            });
-
-            // Tarefa avulsa no form principal
-            document.getElementById('btnAddAvulsa').addEventListener('click', adicionarAvulsa);
-            document.getElementById('tarefaAvulsa').addEventListener('keydown', (e) => {
-                if (e.key === 'Enter') { e.preventDefault(); adicionarAvulsa(); }
-            });
-
-            // Pesquisa de afazeres
-            document.getElementById('pesquisaAfazeres').addEventListener('input', () => {
-                renderAfazeresCheckboxes();
-            });
-
-            // Drawer lateral de tabs (mobile)
-            const adminTabsEl = document.getElementById('adminTabs');
-            const tabsOverlayEl = document.getElementById('tabsOverlay');
-            const tabsToggleEl = document.getElementById('tabsToggle');
-            const tabsCloseEl = document.getElementById('tabsClose');
-            const tabsToggleLabel = document.getElementById('tabsToggleLabel');
-            function abrirTabsDrawer() {
-                if (adminTabsEl) adminTabsEl.classList.add('open');
-                if (tabsOverlayEl) tabsOverlayEl.classList.add('active');
-            }
-            function fecharTabsDrawer() {
-                if (adminTabsEl) adminTabsEl.classList.remove('open');
-                if (tabsOverlayEl) tabsOverlayEl.classList.remove('active');
-            }
-            function atualizarLabelTab() {
-                const ativa = document.querySelector('.tab.active');
-                if (ativa && tabsToggleLabel) {
-                    tabsToggleLabel.textContent = ativa.textContent.trim();
-                }
-            }
-            if (tabsToggleEl) tabsToggleEl.addEventListener('click', abrirTabsDrawer);
-            if (tabsCloseEl) tabsCloseEl.addEventListener('click', fecharTabsDrawer);
-            if (tabsOverlayEl) tabsOverlayEl.addEventListener('click', fecharTabsDrawer);
-            atualizarLabelTab();
-
-            // Tabs (lazy render)
-            document.querySelectorAll('.tab').forEach(tab => {
-                tab.addEventListener('click', () => {
-                    const target = tab.dataset.tab;
-                    if ((target === 'gerenciar' && !gerenciarDesbloqueado) || (target === 'tarefas' && !tarefasDesbloqueado)) {
-                        requestedTab = target;
-                        document.getElementById('senhaAbaInput').value = '';
-                        document.getElementById('senhaAbaModal').classList.add('active');
-                        setTimeout(() => document.getElementById('senhaAbaInput').focus(), 50);
-                        return; // Don't switch tab yet
-                    }
-
-                    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-                    document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
-                    tab.classList.add('active');
-                    document.getElementById(target).classList.add('active');
-                    atualizarLabelTab();
-                    fecharTabsDrawer();
-                    if (target === 'dashboardEnc') renderDashboardEncarregado();
-                    if (target === 'tarefas') {
-                        // Auto-carregar para o dia atual (Fix #4)
-                        const filtroData = document.getElementById('filtroTarefaData');
-                        if (filtroData && !filtroData.value) {
-                            filtroData.value = obterDataLocal();
-                        }
-                        renderTarefasLista();
-                    }
-                    else if (target === 'gerenciar') renderGerenciarLista();
-                    else if (target === 'cadastroAfazeres') renderAfazeresCadastroLista();
-                    else if (target === 'relatorios') gerarRelatorio(); // Atualiza relatório ao abrir a aba
-                });
-            });
-
-            // Relatórios
-            document.getElementById('gerarRelatorio').addEventListener('click', gerarRelatorio);
-            // Ao mudar a data do relatório, carregar a observação salva do Firestore
-            document.getElementById('dataRelatorio').addEventListener('change', () => {
-                const dataRel = document.getElementById('dataRelatorio').value;
-                const obsSalva = observacoes.find(o => o.data === dataRel);
-                document.getElementById('observacaoRelatorio').value = obsSalva ? obsSalva.texto : '';
-                renderFuncionarioStatusSection();
-            });
-
-            // Gráficos
-            document.getElementById('gerarGraficos').addEventListener('click', gerarGraficos);
-            document.getElementById('gerarGraficoTarefas').addEventListener('click', gerarGraficoTarefas);
-
-            document.getElementById('editarRegistroForm').addEventListener('submit', salvarEdicaoRegistro);
-
-            // Filtro de vendedor em gerenciar
-            document.getElementById('filtroVendedor').addEventListener('change', renderGerenciarLista);
-
-            // Tarefas
-            document.getElementById('adicionarTarefa').addEventListener('click', () => {
-                document.getElementById('tarefaModalTitle').textContent = '➕ Adicionar Tarefa';
-                document.getElementById('tarefaId').value = '';
-                document.getElementById('tarefaDescricao').value = '';
-                document.getElementById('tarefaStatus').value = 'pendente';
-                document.getElementById('tarefaData').value = obterDataLocal();
-                preencherSelectTarefaVendedor();
-                preencherSelectTarefaDescricao();
-                document.getElementById('tarefaModal').classList.add('active');
-            });
-            document.getElementById('tarefaForm').addEventListener('submit', salvarTarefa);
-            document.getElementById('filtroTarefaVendedor').addEventListener('change', renderTarefasLista);
-            document.getElementById('filtroTarefaData').addEventListener('change', renderTarefasLista);
-
-            // Dashboard Encarregado
-            document.getElementById('atualizarDashboard').addEventListener('click', renderDashboardEncarregado);
-
-            // Cadastro de Afazeres (templates)
-            document.getElementById('adicionarAfazerCadastro').addEventListener('click', () => abrirAfazerCadastroModal());
-            document.getElementById('afazerCadastroForm').addEventListener('submit', salvarAfazerCadastro);
-            document.getElementById('afazerCadastroRecorrencia').addEventListener('change', (e) => {
-                document.getElementById('afazerDiasSemanaGroup').style.display =
-                    e.target.value === 'semanal' ? 'block' : 'none';
-            });
-        }
-
-        // Função para obter a data no fuso horário de São Paulo/Brasília (UTC-3)
-        function obterDataLocal() {
-            const agora = new Date();
-            // Formata a data no fuso de São Paulo usando Intl.DateTimeFormat
-            const formatador = new Intl.DateTimeFormat('pt-BR', {
-                timeZone: 'America/Sao_Paulo',
-                year: 'numeric',
-                month: '2-digit',
-                day: '2-digit'
-            });
-            const partes = formatador.formatToParts(agora);
-            const ano = partes.find(p => p.type === 'year').value;
-            const mes = partes.find(p => p.type === 'month').value;
-            const dia = partes.find(p => p.type === 'day').value;
-            return `${ano}-${mes}-${dia}`;
-        }
-
-        function setDataHoje() {
-            const hoje = obterDataLocal();
-            document.getElementById('dataRegistro').value = hoje;
-            document.getElementById('dashboardData').value = hoje;
-            document.getElementById('dataRelatorio').value = hoje; // Fix #5: auto-set report date
-            document.getElementById('filtroTarefaData').value = hoje; // Fix #4: auto-set tasks filter
-
-            // Set current month for charts
-            const mesAtual = hoje.slice(0, 7);
-            document.getElementById('mesGrafico').value = mesAtual;
-
-            document.getElementById('dataRegistro').addEventListener('change', () => {
-                if (document.getElementById('vendedorSelecionado').value) {
-                    renderAfazeresCheckboxes();
-                }
-            });
-        }
-
-        function atualizarModoUsuario() { /* removido — sem mais modo admin */ }
-
-        function renderVendedores() {
-            const grid = document.getElementById('vendedoresGrid');
-            grid.innerHTML = '';
-
-            vendedores.forEach(vendedor => {
-                const card = document.createElement('div');
-                card.className = 'vendedor-card';
-                card.style.color = vendedor.cor;
-                card.innerHTML = `
-                    <button type="button" class="vendedor-edit-btn" title="Editar nome" style="top: 6px; right: 32px;">
-                        <i class="fas fa-pen"></i>
-                    </button>
-                    <button type="button" class="vendedor-edit-btn" title="Excluir funcionário" style="top: 6px; right: 6px; color: var(--danger);" onclick="event.stopPropagation(); excluirVendedor(${vendedor.id});">
-                        <i class="fas fa-times"></i>
-                    </button>
-                    <div class="vendedor-icon">
-                        <i class="fas ${vendedor.icone}"></i>
-                    </div>
-                    <div class="vendedor-name">${vendedor.nome}</div>
-                `;
-                card.addEventListener('click', () => selecionarVendedor(vendedor.id, card));
-                card.querySelector('.vendedor-edit-btn').addEventListener('click', e => {
-                    e.stopPropagation();
-                    abrirEditarVendedorModal(vendedor.id);
-                });
-                grid.appendChild(card);
-            });
-        }
-
-        function selecionarVendedor(id, card) {
-            document.querySelectorAll('.vendedor-card').forEach(c => c.classList.remove('selected'));
-            card.classList.add('selected');
-            document.getElementById('vendedorSelecionado').value = id;
-            
-            // Transição suave para o Passo 2
-            const passo1 = document.getElementById('passo1');
-            const passo2 = document.getElementById('passo2');
-            
-            passo1.style.display = 'none';
-            passo2.style.display = 'block';
-            passo2.classList.add('fade-in');
-            
-            // Resetar seleções de afazeres para o novo funcionário (Fix #2)
-            avulsasTemp = [];
-            afazeresSelecionados.clear();
-            const pesquisaAfazeres = document.getElementById('pesquisaAfazeres');
-            if (pesquisaAfazeres) pesquisaAfazeres.value = '';
-            renderAvulsasList();
-            renderAfazeresCheckboxes();
-        }
-
-        // ===== Edição de funcionário =====
-        function abrirEditarVendedorModal(id) {
-            const v = vendedores.find(x => x.id === id);
-            if (!v) return;
-            document.getElementById('editarVendedorId').value = v.id;
-            document.getElementById('editarVendedorNome').value = v.nome;
-            document.getElementById('editarVendedorCor').value = v.cor || '#3498db';
-            document.getElementById('editarVendedorModal').classList.add('active');
-            setTimeout(() => document.getElementById('editarVendedorNome').focus(), 50);
-        }
-        function closeEditarVendedorModal() {
-            document.getElementById('editarVendedorModal').classList.remove('active');
-        }
-        async function salvarEdicaoVendedor(e) {
-            e.preventDefault();
-            const id = parseInt(document.getElementById('editarVendedorId').value);
-            const nome = document.getElementById('editarVendedorNome').value.trim();
-            const cor = document.getElementById('editarVendedorCor').value;
-            if (!nome) {
-                if (typeof showToast === 'function') showToast('⚠️ Nome obrigatório', 'warning');
-                return;
-            }
-            const v = vendedores.find(x => x.id === id);
-            if (!v) return;
-            v.nome = nome;
-            v.cor = cor;
-            await salvarVendedores();
-            renderVendedores();
-            atualizarSelectsVendedores();
-            if (typeof renderRelatorio === 'function') {
-                try { renderRelatorio(); } catch (_) {}
-            }
-            closeEditarVendedorModal();
-            if (typeof showToast === 'function') showToast('✅ Funcionário atualizado!', 'success');
-        }
-        document.addEventListener('DOMContentLoaded', () => {
-            const f = document.getElementById('editarVendedorForm');
-            if (f) f.addEventListener('submit', salvarEdicaoVendedor);
-            const modal = document.getElementById('editarVendedorModal');
-            if (modal) modal.addEventListener('click', e => {
-                if (e.target === modal) closeEditarVendedorModal();
-            });
-
-            // Adicionar vendedor form
-            const fAdd = document.getElementById('adicionarVendedorForm');
-            if (fAdd) fAdd.addEventListener('submit', salvarNovoVendedor);
-            const modalAdd = document.getElementById('adicionarVendedorModal');
-            if (modalAdd) modalAdd.addEventListener('click', e => {
-                if (e.target === modalAdd) closeAdicionarVendedorModal();
-            });
-        });
-
-        // ===== Adicionar novo funcionário =====
-        function abrirAdicionarVendedorModal() {
-            document.getElementById('novoVendedorNome').value = '';
-            document.getElementById('novoVendedorCor').value = '#6366f1';
-            document.getElementById('novoVendedorIcone').value = 'fa-user';
-            document.getElementById('adicionarVendedorModal').classList.add('active');
-            setTimeout(() => document.getElementById('novoVendedorNome').focus(), 50);
-        }
-        function closeAdicionarVendedorModal() {
-            document.getElementById('adicionarVendedorModal').classList.remove('active');
-        }
-        async function salvarNovoVendedor(e) {
-            e.preventDefault();
-            const nome = document.getElementById('novoVendedorNome').value.trim();
-            const cor = document.getElementById('novoVendedorCor').value;
-            const icone = document.getElementById('novoVendedorIcone').value;
-            if (!nome) {
-                showToast('⚠️ Nome obrigatório', 'warning');
-                return;
-            }
-            // Verificar nome duplicado
-            if (vendedores.some(v => v.nome.toLowerCase() === nome.toLowerCase())) {
-                showToast('⚠️ Já existe um funcionário com este nome!', 'warning');
-                return;
-            }
-            // Gerar ID único baseado no maior ID já existente (Fix #3)
-            const novoId = Math.max(0, ...vendedores.map(v => v.id), ...registros.map(r => r.vendedorId || 0), ...tarefas.map(t => t.vendedorId || 0)) + 1;
-            vendedores.push({ id: novoId, nome, cor, icone });
-            await salvarVendedores();
-            renderVendedores();
-            atualizarSelectsVendedores();
-            closeAdicionarVendedorModal();
-            showToast('✅ Funcionário adicionado com sucesso!', 'success');
-        }
-
-        // ===== Excluir funcionário =====
-        async function excluirVendedor(id) {
-            const v = vendedores.find(x => x.id === id);
-            if (!v) return;
-            customConfirm(`Tem certeza que deseja excluir o funcionário "${v.nome}"? Todos os registros e tarefas associados serão removidos.`, '🗑️ Excluir funcionário').then(async (ok) => {
-                if (!ok) return;
-                vendedores = vendedores.filter(x => x.id !== id);
-                // Limpar registros e tarefas associados ao funcionário excluído (Fix #3)
-                registros = registros.filter(r => r.vendedorId !== id);
-                tarefas = tarefas.filter(t => t.vendedorId !== id);
-                await salvarVendedores();
-                await salvarRegistros();
-                await salvarTarefas();
-                renderVendedores();
-                atualizarSelectsVendedores();
-                atualizarResumoHoje();
-                atualizarMetasHeader();
-                showToast('Funcionário excluído!', 'success');
-            });
-        }
-
-        // Renderiza os checkboxes do passo 2 baseados nos afazeres cadastrados
-        // e na data + dia da semana (filtrando recorrência)
-        function renderAfazeresCheckboxes() {
-            const container = document.getElementById('afazeresCheckboxes');
-            const pesquisaInput = document.getElementById('pesquisaAfazeres');
-            const termoPesquisa = pesquisaInput ? pesquisaInput.value.toLowerCase().trim() : '';
-            const data = document.getElementById('dataRegistro').value;
-            const diaSemana = data ? new Date(data + 'T00:00:00').getDay() : null;
-
-            // Usar o Set global afazeresSelecionados para preservar seleções (Fix #1)
-            const relevantes = afazeresCadastrados.filter(a => {
-                if (a.recorrencia === 'diaria') return true;
-                if (a.recorrencia === 'avulsa') return true;
-                if (a.recorrencia === 'semanal') return a.diasSemana && a.diasSemana.includes(diaSemana);
-                return false;
-            });
-
-            // Filtrar por pesquisa
-            const filtrados = termoPesquisa 
-                ? relevantes.filter(a => a.descricao.toLowerCase().includes(termoPesquisa))
-                : relevantes;
-
-            const totalLabel = document.getElementById('afazeresTotalLabel');
-            if (totalLabel) {
-                totalLabel.textContent = termoPesquisa 
-                    ? `${filtrados.length} de ${relevantes.length} encontrados`
-                    : `${relevantes.length} disponíveis`;
-            }
-
-            if (filtrados.length === 0) {
-                container.innerHTML = termoPesquisa
-                    ? '<div class="afazeres-empty"><i class="fas fa-search"></i>Nenhum afazer encontrado para esta pesquisa.</div>'
-                    : '<div class="afazeres-empty"><i class="fas fa-inbox"></i>Nenhum afazer cadastrado.<br>Cadastre na aba "Cadastrar Afazeres".</div>';
-                atualizarContadorAfazeres();
-                return;
-            }
-
-            container.innerHTML = filtrados.map(a => {
-                const desc = String(a.descricao).replace(/"/g,'&quot;');
-                const badge = a.recorrencia;
-                const label = badge.charAt(0).toUpperCase() + badge.slice(1);
-                const checked = afazeresSelecionados.has(a.descricao) ? 'checked' : '';
-                return `
-                    <label class="afazer-item ${checked ? 'checked' : ''}">
-                        <input type="checkbox" class="afazerCheck" value="${desc}" ${checked}>
-                        <span class="afazer-text">${a.descricao}</span>
-                        <span class="afazer-badge ${badge}">${label}</span>
-                    </label>
-                `;
-            }).join('');
-
-            container.querySelectorAll('.afazerCheck').forEach(chk => {
-                chk.addEventListener('change', e => {
-                    const desc = e.target.value;
-                    if (e.target.checked) {
-                        afazeresSelecionados.add(desc);
-                    } else {
-                        afazeresSelecionados.delete(desc);
-                    }
-                    e.target.closest('.afazer-item').classList.toggle('checked', e.target.checked);
-                    atualizarContadorAfazeres();
-                });
-            });
-            atualizarContadorAfazeres();
-        }
-
-        function atualizarContadorAfazeres() {
-            const el = document.getElementById('afazeresSelCount');
-            if (el) el.textContent = afazeresSelecionados.size;
-        }
-
-        function adicionarAvulsa() {
-            const input = document.getElementById('tarefaAvulsa');
-            const v = input.value.trim();
-            if (!v) return;
-            avulsasTemp.push(v);
-            input.value = '';
-            renderAvulsasList();
-        }
-
-        function renderAvulsasList() {
-            const c = document.getElementById('avulsasList');
-            if (avulsasTemp.length === 0) { c.innerHTML = ''; return; }
-            c.innerHTML = avulsasTemp.map((t, i) => `
-                <div style="display:flex; justify-content:space-between; align-items:center; background:#ffffff; border:1px solid #eef0f4; padding:8px 12px; border-radius:6px;">
-                    <span>➕ ${t}</span>
-                    <button type="button" class="btn btn-danger btn-small" onclick="removerAvulsa(${i})">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </div>
-            `).join('');
-        }
-
-        function removerAvulsa(i) {
-            avulsasTemp.splice(i, 1);
-            renderAvulsasList();
-        }
-
-        function isTaskLocked(task) {
-            if (!task.timestamp) return false;
-            const ageMs = Date.now() - new Date(task.timestamp).getTime();
-            return ageMs > 72 * 60 * 60 * 1000; // 72 horas em milissegundos
-        }
-
-        async function salvarRegistro(e) {
-            e.preventDefault();
-
-            const data = document.getElementById('dataRegistro').value;
-            const vendedorId = parseInt(document.getElementById('vendedorSelecionado').value);
-            const cashback = parseInt(document.getElementById('cashback').value) || 0;
-            const avaliacoes = parseInt(document.getElementById('avaliacoes').value) || 0;
-
-            if (!vendedorId) {
-                showToast('⚠️ Por favor, selecione um funcionário!', 'warning');
-                return;
-            }
-
-            const checadas = Array.from(afazeresSelecionados);
-            const tarefasFeitas = [...checadas, ...avulsasTemp];
-
-            // Adicionar tarefas ao array de tarefas com status pendente
-            const now = Date.now();
-            tarefasFeitas.forEach((desc, i) => {
-                tarefas.push({
-                    id: now + i,
-                    vendedorId,
-                    data,
-                    descricao: desc,
-                    status: 'pendente',
-                    timestamp: new Date().toISOString(),
-                    criadoEm: new Date()
-                });
-            });
-            await salvarTarefas();
-
-            const registro = {
-                id: Date.now() + 9999,
-                data,
-                vendedorId,
-                cashback,
-                avaliacoes,
-                tarefas: tarefasFeitas,
-                timestamp: new Date().toISOString(),
-                criadoEm: new Date()
-            };
-
-            registros.push(registro);
-            await salvarRegistros();
-
-            // Executar limpeza automática após salvar
-            await limparDadosAntigos();
-
-            // Mostrar tela de sucesso
-            document.getElementById('passo2').style.display = 'none';
-            const telaSucesso = document.getElementById('telaSucesso');
-            telaSucesso.style.display = 'block';
-            telaSucesso.classList.add('fade-in');
-
-            atualizarResumoHoje();
-            atualizarMetasHeader();
-            // Re-renders pesados acontecem só quando a aba estiver ativa
-            if (document.getElementById('gerenciar').classList.contains('active')) renderGerenciarLista();
-            if (document.getElementById('dashboardEnc').classList.contains('active')) renderDashboardEncarregado();
-
-            // Retornar ao Passo 1 após 2.5 segundos
-            setTimeout(() => {
-                telaSucesso.style.display = 'none';
-                const passo1 = document.getElementById('passo1');
-                passo1.style.display = 'block';
-                passo1.classList.add('fade-in');
-                
-                // Limpar formulário completamente
-                document.getElementById('cashback').value = '0';
-                document.getElementById('avaliacoes').value = '0';
-                document.querySelectorAll('.vendedor-card').forEach(c => c.classList.remove('selected'));
-                document.getElementById('vendedorSelecionado').value = '';
-                avulsasTemp = [];
-                afazeresSelecionados.clear(); // Limpar seleções de afazeres
-                const pesquisaAfazeres = document.getElementById('pesquisaAfazeres');
-                if (pesquisaAfazeres) pesquisaAfazeres.value = '';
-            }, 2500);
-        }
-
-        function atualizarMetasHeader() {
-            const hoje = obterDataLocal();
-            const mesAtual = hoje.slice(0, 7);
-            const registrosMes = registros.filter(r => r.data.startsWith(mesAtual));
-            
-            const totalCashMes = registrosMes.reduce((sum, r) => sum + r.cashback, 0);
-            const totalAvalMes = registrosMes.reduce((sum, r) => sum + r.avaliacoes, 0);
-            
-            const pctCashMes = metaCashback > 0 ? ((totalCashMes / metaCashback) * 100).toFixed(1) : 0;
-            const pctAvalMes = metaAvaliacoes > 0 ? ((totalAvalMes / metaAvaliacoes) * 100).toFixed(1) : 0;
-            
-            document.getElementById('metaCashbackHeader').textContent = metaCashback;
-            document.getElementById('metaCashbackPctHeader').textContent = `(${totalCashMes} - ${pctCashMes}%)`;
-            
-            document.getElementById('metaAvaliacoesHeader').textContent = metaAvaliacoes;
-            document.getElementById('metaAvaliacoesPctHeader').textContent = `(${totalAvalMes} - ${pctAvalMes}%)`;
-        }
-
-        function atualizarResumoHoje() {
-            const hoje = obterDataLocal();
-            const registrosHoje = registros.filter(r => r.data === hoje);
-            
-            const container = document.getElementById('resumoHoje');
-            
-            if (registrosHoje.length === 0) {
-                container.innerHTML = `
-                    <div class="empty-state">
-                        <i class="fas fa-calendar-times"></i>
-                        <p>Nenhum registro hoje</p>
-                    </div>
-                `;
-                return;
-            }
-
-            let html = '<div class="stats-grid">';
-            
-            vendedores.forEach(vendedor => {
-                const regsVendedor = registrosHoje.filter(r => r.vendedorId === vendedor.id);
-                if (regsVendedor.length > 0) {
-                    const totalCashback = regsVendedor.reduce((sum, r) => sum + r.cashback, 0);
-                    const totalAvaliacoes = regsVendedor.reduce((sum, r) => sum + r.avaliacoes, 0);
-                    
-                    html += `
-                        <div class="stat-card" style="border-top: 3px solid ${vendedor.cor};">
-                            <i class="fas ${vendedor.icone}" style="color: ${vendedor.cor};"></i>
-                            <div class="label">${vendedor.nome}</div>
-                            <div class="value" style="color: ${vendedor.cor};">${totalCashback}</div>
-                            <div class="label">Cashback</div>
-                            <div class="value" style="color: ${vendedor.cor}; font-size: 1.5rem;">${totalAvaliacoes}</div>
-                            <div class="label">Avaliações</div>
-                        </div>
-                    `;
-                }
-            });
-            
-            html += '</div>';
-            container.innerHTML = html;
-        }
-
-        function atualizarSelectsVendedores() {
-            const selects = ['vendedorRelatorio', 'filtroVendedor', 'filtroTarefaVendedor'];
-            selects.forEach(selectId => {
-                const select = document.getElementById(selectId);
-                const valorAtual = select.value;
-                
-                // Manter primeira opção
-                const primeiraOpcao = select.options[0];
-                select.innerHTML = '';
-                select.appendChild(primeiraOpcao);
-                
-                vendedores.forEach(v => {
-                    const option = document.createElement('option');
-                    option.value = v.id;
-                    option.textContent = v.nome;
-                    select.appendChild(option);
-                });
-                
-                if (valorAtual) {
-                    select.value = valorAtual;
-                }
-            });
-            // Atualizar também o select do gráfico de tarefas
-            popularSelectVendedorGrafico();
-        }
-
-        function popularSelectVendedorGrafico() {
-            const select = document.getElementById('vendedorGraficoTarefas');
-            if (!select) return;
-            const valorAtual = select.value;
-            select.innerHTML = '<option value="">Selecione um funcionário...</option>';
-            vendedores.forEach(v => {
-                const option = document.createElement('option');
-                option.value = v.id;
-                option.textContent = v.nome;
-                select.appendChild(option);
-            });
-            if (valorAtual) {
-                select.value = valorAtual;
-            }
-        }
-
-        function renderFuncionarioStatusSection() {
-            const dataRel = document.getElementById('dataRelatorio').value || obterDataLocal();
-            const container = document.getElementById('funcionarioStatusLista');
-            if (!container) return;
-
-            if (vendedores.length === 0) {
-                container.innerHTML = '<p style="color: var(--text-muted); font-size: 0.85rem; font-style: italic;">Nenhum funcionário cadastrado.</p>';
-                return;
-            }
-
-            container.innerHTML = vendedores.map(v => {
-                const statusEntry = funcionarioStatus.find(fs => fs.data === dataRel && fs.vendedorId === v.id);
-                const statusVal = statusEntry ? statusEntry.status : 'normal';
-                return `
-                    <div style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--bg-elev); border: 1px solid var(--border-soft); border-radius: var(--radius-sm); border-left: 4px solid ${v.cor};">
-                        <i class="fas ${v.icone}" style="color: ${v.cor}; font-size: 1.1rem; flex-shrink: 0;"></i>
-                        <span style="font-weight: 600; font-size: 0.88rem; min-width: 80px; color: var(--text);">${v.nome}</span>
-                        <div style="display: flex; gap: 6px; margin-left: auto; flex-wrap: wrap;">
-                            <label style="display: flex; align-items: center; gap: 4px; cursor: pointer; font-size: 0.82rem; color: var(--text-muted);">
-                                <input type="radio" name="status_${v.id}" value="normal" ${statusVal === 'normal' ? 'checked' : ''} onchange="setFuncionarioStatus(${v.id}, 'normal')"> Normal
-                            </label>
-                            <label style="display: flex; align-items: center; gap: 4px; cursor: pointer; font-size: 0.82rem; color: var(--warning);">
-                                <input type="radio" name="status_${v.id}" value="falta" ${statusVal === 'falta' ? 'checked' : ''} onchange="setFuncionarioStatus(${v.id}, 'falta')"> ❌ Falta
-                            </label>
-                            <label style="display: flex; align-items: center; gap: 4px; cursor: pointer; font-size: 0.82rem; color: var(--primary);">
-                                <input type="radio" name="status_${v.id}" value="atestado" ${statusVal === 'atestado' ? 'checked' : ''} onchange="setFuncionarioStatus(${v.id}, 'atestado')"> 🩺 Atestado
-                            </label>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-        }
-
-        async function setFuncionarioStatus(vendedorId, status) {
-            const dataRel = document.getElementById('dataRelatorio').value || obterDataLocal();
-            // Remove any existing status for this date/employee
-            funcionarioStatus = funcionarioStatus.filter(fs => !(fs.data === dataRel && fs.vendedorId === vendedorId));
-            // Add new status only if not normal
-            if (status !== 'normal') {
-                funcionarioStatus.push({
-                    id: Date.now(),
-                    data: dataRel,
-                    vendedorId: vendedorId,
-                    status: status,
-                    timestamp: new Date().toISOString()
-                });
-            }
-            await salvarFuncionarioStatus();
-            gerarRelatorio();
-        }
-
-        function gerarRelatorio() {
-            const vendedorId = document.getElementById('vendedorRelatorio').value;
-            let dataRelatorio = document.getElementById('dataRelatorio').value;
-
-            // Carregar automático do dia se não estiver preenchido
-            if (!dataRelatorio) {
-                dataRelatorio = obterDataLocal();
-                document.getElementById('dataRelatorio').value = dataRelatorio;
-            }
-
-            // Atualizar a seção de status do funcionário
-            renderFuncionarioStatusSection();
-
-            let registrosFiltrados = [...registros];
-
-            if (vendedorId) {
-                registrosFiltrados = registrosFiltrados.filter(r => r.vendedorId == vendedorId);
-            }
-            registrosFiltrados = registrosFiltrados.filter(r => r.data === dataRelatorio);
-
-            const container = document.getElementById('relatorioResultado');
-
-            const dataF = new Date(dataRelatorio + 'T00:00:00').toLocaleDateString('pt-BR');
-
-            // Agrupa por funcionário
-            const porFuncionario = {};
-            registrosFiltrados.forEach(r => {
-                if (!porFuncionario[r.vendedorId]) {
-                    porFuncionario[r.vendedorId] = { cashback: 0, avaliacoes: 0, tarefas: [] };
-                }
-                porFuncionario[r.vendedorId].cashback += r.cashback;
-                porFuncionario[r.vendedorId].avaliacoes += r.avaliacoes;
-                if (Array.isArray(r.tarefas)) {
-                    porFuncionario[r.vendedorId].tarefas.push(...r.tarefas);
-                }
-            });
-
-            // Determinar quais funcionários exibir
-            const vendedoresParaExibir = vendedorId
-                ? vendedores.filter(v => v.id == vendedorId)
-                : vendedores;
-
-            let html = '';
-            let textoCopia = '';
-
-            // Cabeçalho do relatório
-            const tituloRel = `📋 Relatório ${lojaNome} — ${dataF}`;
-            textoCopia += `${tituloRel}\n`;
-            textoCopia += `${'─'.repeat(11)}\n`;
-
-            html += `
-                <div class="dashboard-card" style="background: #eef2ff; border-color: #c7d2fe;">
-                    <h3 style="color:#1f2937; margin-bottom:14px; font-size:1.25rem; font-weight:600;">${tituloRel}</h3>
-            `;
-
-            // Status de tarefas — legenda (um por linha)
-            html += `
-                <div style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; font-size: 0.88rem; color: var(--text-muted);">
-                    <span>✅ Concluído.</span>
-                    <span>🔄 Em Andamento.</span>
-                    <span>❌ Não Realizado.</span>
-                </div>
-                <div style="border-bottom: 1px solid #c7d2fe; margin-bottom: 16px;"></div>
-            `;
-
-            textoCopia += `✅ Concluído.\n`;
-            textoCopia += `🔄 Em Andamento.\n`;
-            textoCopia += `❌ Não Realizado.\n`;
-            textoCopia += `${'─'.repeat(11)}\n`;
-
-            vendedoresParaExibir.forEach(v => {
-                const fsEntry = funcionarioStatus.find(fs => fs.data === dataRelatorio && fs.vendedorId === v.id);
-                const statusVal = fsEntry ? fsEntry.status : null;
-
-                html += `
-                    <div style="margin: 10px 0; padding: 12px; background: #ffffff; border: 1px solid #eef0f4; border-radius: 8px; border-left: 4px solid ${v.cor};">
-                        <h4 style="color:${v.cor}; margin-bottom:8px; font-size:1rem;">
-                            👤 <em>${v.nome}</em>
-                        </h4>
-                `;
-                textoCopia += `\n👤 *${v.nome}*\n`;
-
-                if (statusVal === 'falta') {
-                    html += `<p style="color: #ef4444; font-weight: 600; margin: 0;">❌ Faltou.</p>`;
-                    textoCopia += `❌ Faltou.\n`;
-                } else if (statusVal === 'atestado') {
-                    html += `<p style="color: #4f46e5; font-weight: 600; margin: 0;">🩺 Atestado.</p>`;
-                    textoCopia += `🩺 Atestado.\n`;
-                } else if (!porFuncionario[v.id]) {
-                    html += `<p style="color: #9ca3af; font-style: italic; margin: 0;">⚠️ Funcionário não registrou suas tarefas.</p>`;
-                    textoCopia += `⚠️ Funcionário não registrou suas tarefas.\n`;
-                } else {
-                    const dadosV = porFuncionario[v.id];
-
-                    // Combinar tarefas do registro e da aba tarefas
-                    const tarefasDoRegistro = dadosV.tarefas || [];
-                    const tarefasDaAba = tarefas
-                        .filter(t => t.data === dataRelatorio && t.vendedorId == v.id)
-                        .map(t => t.descricao);
-                    const todasTarefas = [...new Set([...tarefasDoRegistro, ...tarefasDaAba])];
-
-                    if (todasTarefas.length === 0) {
-                        html += `<p style="color: #9ca3af; font-style: italic; margin: 0;">⚠️ Funcionário não registrou suas tarefas.</p>`;
-                        textoCopia += `⚠️ Funcionário não registrou suas tarefas.\n`;
-                    } else {
-                        // Formato: "✅ Afazeres:" como cabeçalho, depois bullet points por tarefa
-                        const listaTarefas = todasTarefas.map(tDesc => {
-                            const tObj = tarefas.find(t => t.data === dataRelatorio && t.vendedorId == v.id && t.descricao === tDesc);
-                            let icon = '⏳';
-                            if (tObj) {
-                                if (tObj.status === 'concluido') icon = '✅';
-                                else if (tObj.status === 'em_andamento') icon = '🔄';
-                                else if (tObj.status === 'nao_realizado') icon = '❌';
-                            }
-                            return { icon, desc: tDesc };
-                        });
-
-                        // HTML: cabeçalho "✅ Afazeres:" + lista com bullets
-                        html += `<div style="margin-left:8px; margin-bottom: 4px; font-weight:600; font-size:0.9rem; color:#1f2937;">✅ Afazeres:</div>`;
-                        html += `<div style="margin-left:16px; margin-bottom: 8px;">`;
-                        html += listaTarefas.map(t => `<div style="font-size: 0.9rem;">${t.icon} ${t.desc}.</div>`).join('');
-                        html += `</div>`;
-
-                        // Texto copiado: "✅ Afazeres:" + bullets sem ícones individuais
-                        textoCopia += `✅ Afazeres:\n`;
-                        listaTarefas.forEach(t => { textoCopia += `  • ${t.desc}.\n`; });
-                    }
-
-                    html += `
-                        <div style="margin-top:8px; display: flex; gap: 10px; flex-wrap: wrap;">
-                            <span style="font-size: 0.88rem;">🎁 Cashback: <strong>${dadosV.cashback}</strong></span>
-                            <span style="font-size: 0.88rem;">⭐ Avaliação: <strong>${dadosV.avaliacoes}</strong></span>
-                        </div>
-                    `;
-                    textoCopia += `🎁 Cashback: ${dadosV.cashback}\n`;
-                    textoCopia += `⭐ Avaliação: ${dadosV.avaliacoes}\n`;
-                }
-
-                html += `</div>`;
-                textoCopia += `${'─'.repeat(11)}\n`;
-            });
-
-            html += `</div>`;
-
-            // Adicionar observação ao final do relatório
-            const obsDoFirestore = observacoes.find(o => o.data === dataRelatorio);
-            const obs = obsDoFirestore ? obsDoFirestore.texto : document.getElementById('observacaoRelatorio').value.trim();
-            if (obsDoFirestore && document.getElementById('observacaoRelatorio').value.trim() !== obsDoFirestore.texto) {
-                document.getElementById('observacaoRelatorio').value = obsDoFirestore.texto;
-            }
-            if (obs) {
-                html += `
-                    <div class="dashboard-card" style="background: #fffbeb; border-color: #fde68a; margin-top: 16px;">
-                        <h4 style="color: #92400e;"><i class="fas fa-comment-dots"></i> Obg do dia</h4>
-                        <p style="color: #78350f; white-space: pre-wrap; margin: 0;">${obs.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>
-                    </div>
-                `;
-                textoCopia += `\n*Obg do dia*: ${obs}\n`;
-            }
-            textoCopia += `${'─'.repeat(11)}\n`;
-
-            // Botão copiar
-            html = `
-                <div style="display:flex; justify-content:flex-end; margin-bottom:15px;">
-                    <button class="btn btn-secondary" onclick="copiarRelatorio()">📋 Copiar relatório (texto)</button>
-                </div>
-                <textarea id="relatorioTextoCopia" style="position:absolute; left:-9999px;">${textoCopia.trim()}</textarea>
-            ` + html;
-
-            container.innerHTML = html;
-        }
-
-        function copiarRelatorio() {
-            const ta = document.getElementById('relatorioTextoCopia');
-            ta.style.position = 'static';
-            ta.select();
-            try {
-                document.execCommand('copy');
-                showToast('📋 Relatório copiado para a área de transferência!', 'success');
-            } catch (err) {
-                showToast('Erro ao copiar.', 'error');
-            }
-            ta.style.position = 'absolute';
-            ta.style.left = '-9999px';
-        }
-
-        let observacaoRelatorioGlobal = '';
-
-        async function adicionarObservacaoRelatorio() {
-            const obs = document.getElementById('observacaoRelatorio').value.trim();
-            if (!obs) {
-                showToast('⚠️ Digite uma observação antes de adicionar.', 'warning');
-                return;
-            }
-            const dataRelatorio = document.getElementById('dataRelatorio').value || obterDataLocal();
-            observacaoRelatorioGlobal = obs;
-
-            // Salvar/Atualizar observação no Firestore para a data selecionada
-            const obsExistente = observacoes.find(o => o.data === dataRelatorio);
-            if (obsExistente) {
-                obsExistente.texto = obs;
-                obsExistente.timestamp = new Date().toISOString();
-            } else {
-                observacoes.push({
-                    id: Date.now(),
-                    data: dataRelatorio,
-                    texto: obs,
-                    timestamp: new Date().toISOString()
-                });
-            }
-            await salvarObservacoes();
-
-            gerarRelatorio();
-            showToast('📝 Observação salva e adicionada ao relatório!', 'success');
-        }
-
-        function renderGerenciarLista() {
-            const filtroVendedor = document.getElementById('filtroVendedor').value;
-            const container = document.getElementById('gerenciarLista');
-            
-            let registrosFiltrados = [...registros];
-            if (filtroVendedor) {
-                registrosFiltrados = registrosFiltrados.filter(r => r.vendedorId == filtroVendedor);
-            }
-            
-            if (registrosFiltrados.length === 0) {
-                container.innerHTML = `
-                    <div class="empty-state">
-                        <i class="fas fa-database"></i>
-                        <p>Nenhum registro encontrado</p>
-                    </div>
-                `;
-                return;
-            }
-            
-            let html = `
-                <div class="table-responsive">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Data</th>
-                            <th>Vendedor</th>
-                            <th>Cashback</th>
-                            <th>Avaliações</th>
-                            <th>Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-            `;
-            
-            registrosFiltrados.sort((a, b) => new Date(b.data) - new Date(a.data)).forEach(reg => {
-                const vendedor = vendedores.find(v => v.id === reg.vendedorId);
-                if (vendedor) {
-                    const dataFormatada = new Date(reg.data + 'T00:00:00').toLocaleDateString('pt-BR');
-                    html += `
-                        <tr>
-                            <td>${dataFormatada}</td>
-                            <td style="color: ${vendedor.cor}; font-weight: 600;">
-                                <i class="fas ${vendedor.icone}"></i> ${vendedor.nome}
-                            </td>
-                            <td>${reg.cashback}</td>
-                            <td>${reg.avaliacoes}</td>
-                            <td>
-                                <div class="actions">
-                                    <button class="btn btn-secondary btn-small" onclick="editarRegistro(${reg.id})">
-                                        <i class="fas fa-edit"></i> Editar
-                                    </button>
-                                    <button class="btn btn-danger btn-small" onclick="excluirRegistro(${reg.id})">
-                                        <i class="fas fa-trash"></i> Excluir
-                                    </button>
-                                </div>
-                            </td>
-                        </tr>
-                    `;
-                }
-            });
-            
-            html += '</tbody></table></div>';
-            container.innerHTML = html;
-        }
-
-        function editarRegistro(id) {
-            const registro = registros.find(r => r.id === id);
-            if (!registro) return;
-            
-            document.getElementById('editarRegistroId').value = registro.id;
-            document.getElementById('editarData').value = registro.data;
-            document.getElementById('editarCashback').value = registro.cashback;
-            document.getElementById('editarAvaliacoes').value = registro.avaliacoes;
-            document.getElementById('editarRegistroModal').classList.add('active');
-        }
-
-        async function salvarEdicaoRegistro(e) {
-            e.preventDefault();
-            
-            const id = parseInt(document.getElementById('editarRegistroId').value);
-            const registro = registros.find(r => r.id === id);
-            
-            if (registro) {
-                registro.data = document.getElementById('editarData').value;
-                registro.cashback = parseInt(document.getElementById('editarCashback').value);
-                registro.avaliacoes = parseInt(document.getElementById('editarAvaliacoes').value);
-                
-                await salvarRegistros();
-                closeEditarRegistroModal();
-                renderGerenciarLista();
-                atualizarResumoHoje();
-                showToast('Registro atualizado com sucesso!', 'success');
-            }
-        }
-
-        async function excluirRegistro(id) {
-            customConfirm('Tem certeza que deseja excluir este registro?', '🗑️ Excluir registro').then(async (ok) => {
-                if (!ok) return;
-                registros = registros.filter(r => r.id !== id);
-                await salvarRegistros();
-                renderGerenciarLista();
-                atualizarResumoHoje();
-                showToast('Registro excluído!', 'success');
-            });
-        }
-
-        // Funções de gerenciamento de vendedores foram removidas — funcionários são fixos.
-
-        function gerarGraficos() {
-            const mes = document.getElementById('mesGrafico').value;
-            if (!mes) {
-                showToast('Por favor, selecione um mês!', 'warning');
-                return;
-            }
-            
-            const [ano, mesNum] = mes.split('-');
-            const registrosMes = registros.filter(r => {
-                const [regAno, regMes] = r.data.split('-');
-                return regAno === ano && regMes === mesNum;
-            });
-            
-            if (registrosMes.length === 0) {
-                document.getElementById('graficosContainer').innerHTML = `
-                    <div class="empty-state">
-                        <i class="fas fa-chart-line"></i>
-                        <p>Nenhum registro encontrado para este mês</p>
-                    </div>
-                `;
-                return;
-            }
-
-            // Calcular totais por vendedor
-            const totaisPorVendedor = {};
-            vendedores.forEach(v => {
-                totaisPorVendedor[v.id] = { cashback: 0, avaliacoes: 0, afazeres: 0 };
-            });
-            
-            registrosMes.forEach(reg => {
-                if (totaisPorVendedor[reg.vendedorId]) {
-                    totaisPorVendedor[reg.vendedorId].cashback += reg.cashback;
-                    totaisPorVendedor[reg.vendedorId].avaliacoes += reg.avaliacoes;
-                }
-            });
-
-            // Contar afazeres (tarefas) por vendedor no mês
-            const tarefasMes = tarefas.filter(t => {
-                const [tAno, tMes] = t.data.split('-');
-                return tAno === ano && tMes === mesNum;
-            });
-            
-            tarefasMes.forEach(t => {
-                if (totaisPorVendedor[t.vendedorId]) {
-                    totaisPorVendedor[t.vendedorId].afazeres += 1;
-                }
-            });
-
-            const container = document.getElementById('graficosContainer');
-            container.innerHTML = `
-                <div style="display: grid; grid-template-columns: 1fr; gap: 30px; margin-top: 20px;">
-                    <div class="card">
-                        <h3 style="margin-bottom: 14px; color: #1f2937; font-size: 0.95rem; font-weight: 600;">
-                            <i class="fas fa-gift"></i> Cashback por Vendedor
-                        </h3>
-                        <div class="chart-container" style="height: 400px;">
-                            <canvas id="chartMetas"></canvas>
-                        </div>
-                    </div>
-                    <div class="card">
-                        <h3 style="margin-bottom: 14px; color: #1f2937; font-size: 0.95rem; font-weight: 600;">
-                            <i class="fas fa-tasks"></i> Afazeres por Vendedor
-                        </h3>
-                        <div class="chart-container">
-                            <canvas id="chartAfazeres"></canvas>
-                        </div>
-                    </div>
-                </div>
-            `;
-
-            // Preparar dados
-            const labels = [];
-            const datasetCashback = [];
-            const datasetAfazeres = [];
-            const cores = [];
-
-            vendedores.forEach(vendedor => {
-                if (totaisPorVendedor[vendedor.id].cashback > 0 || totaisPorVendedor[vendedor.id].avaliacoes > 0 || totaisPorVendedor[vendedor.id].afazeres > 0) {
-                    labels.push(vendedor.nome);
-                    datasetCashback.push(totaisPorVendedor[vendedor.id].cashback);
-                    datasetAfazeres.push(totaisPorVendedor[vendedor.id].afazeres);
-                    cores.push(vendedor.cor);
-                }
-            });
-
-            // Gráfico Afazeres
-            new Chart(document.getElementById('chartAfazeres'), {
-                type: 'bar',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: 'Afazeres Realizados',
-                        data: datasetAfazeres,
-                        backgroundColor: cores,
-                        borderRadius: 8
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                            padding: 12,
-                            titleColor: '#fff',
-                            bodyColor: '#fff'
-                        }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            grid: { color: 'rgba(0, 0, 0, 0.06)' },
-                            ticks: { color: '#6b7280' }
-                        },
-                        x: {
-                            grid: { display: false },
-                            ticks: { color: '#6b7280' }
-                        }
-                    }
-                }
-            });
-
-            // Gráfico de Cashback por Vendedor
-            new Chart(document.getElementById('chartMetas'), {
-                type: 'bar',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: 'Cashback',
-                        data: datasetCashback,
-                        backgroundColor: cores,
-                        borderRadius: 8
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                            padding: 12,
-                            titleColor: '#fff',
-                            bodyColor: '#fff'
-                        }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            grid: { color: 'rgba(0, 0, 0, 0.06)' },
-                            ticks: { color: '#6b7280' }
-                        },
-                        x: {
-                            grid: { display: false },
-                            ticks: { color: '#6b7280' }
-                        }
-                    }
-                }
-            });
-        }
-
-        // ============================
-        // NOVO GRÁFICO: Análise de Tarefas por Funcionário
-        // ============================
-        function gerarGraficoTarefas() {
-            const vendedorId = document.getElementById('vendedorGraficoTarefas').value;
-            if (!vendedorId) {
-                showToast('⚠️ Por favor, selecione um funcionário!', 'warning');
-                return;
-            }
-
-            const vendedor = vendedores.find(v => v.id == vendedorId);
-            if (!vendedor) {
-                showToast('⚠️ Funcionário não encontrado!', 'error');
-                return;
-            }
-
-            // Calcular data de 4 semanas atrás
-            const hoje = new Date(obterDataLocal());
-            const quatroSemanasAtras = new Date(hoje);
-            quatroSemanasAtras.setDate(quatroSemanasAtras.getDate() - 28);
-
-            // Filtrar tarefas do vendedor nos últimos 28 dias
-            const tarefasFiltradas = tarefas.filter(t => {
-                if (t.vendedorId != vendedorId) return false;
-                const dataTarefa = new Date(t.data);
-                return dataTarefa >= quatroSemanasAtras && dataTarefa <= hoje;
-            });
-
-            if (tarefasFiltradas.length === 0) {
-                document.getElementById('graficoTarefasContainer').innerHTML = `
-                    <div class="empty-state">
-                        <i class="fas fa-chart-line"></i>
-                        <p>Nenhuma tarefa encontrada para este funcionário nas últimas 4 semanas</p>
-                    </div>
-                `;
-                return;
-            }
-
-            // Agrupar por descrição e contar ocorrências
-            const tarefasPorDescricao = {};
-            const diasSemanaPorTarefa = {};
-
-            tarefasFiltradas.forEach(t => {
-                if (!tarefasPorDescricao[t.descricao]) {
-                    tarefasPorDescricao[t.descricao] = 0;
-                    diasSemanaPorTarefa[t.descricao] = new Set();
-                }
-                tarefasPorDescricao[t.descricao]++;
-                
-                // Pegar dia da semana da tarefa (0 = Domingo, 6 = Sábado)
-                const diaSemana = new Date(t.data + 'T00:00:00').getDay();
-                diasSemanaPorTarefa[t.descricao].add(diaSemana);
-            });
-
-            // Ordenar tarefas por quantidade (mais realizadas primeiro)
-            const tarefasOrdenadas = Object.keys(tarefasPorDescricao)
-                .sort((a, b) => tarefasPorDescricao[b] - tarefasPorDescricao[a]);
-
-            // Preparar dados para o gráfico
-            const labels = tarefasOrdenadas;
-            const data = tarefasOrdenadas.map(desc => tarefasPorDescricao[desc]);
-            const cores = tarefasOrdenadas.map((_, i) => {
-                const coresPaleta = ['#4f46e5', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16'];
-                return coresPaleta[i % coresPaleta.length];
-            });
-
-            // Gerar HTML do gráfico
-            const container = document.getElementById('graficoTarefasContainer');
-            container.innerHTML = `
-                <div class="card" style="margin-top: 20px;">
-                    <h3 style="margin-bottom: 14px; color: var(--text); font-size: 0.95rem; font-weight: 600;">
-                        <i class="fas fa-user" style="color: ${vendedor.cor};"></i> ${vendedor.nome} — Tarefas Mais Realizadas
-                    </h3>
-                    <div class="chart-container" style="height: 400px;">
-                        <canvas id="chartTarefasFuncionario"></canvas>
-                    </div>
-                </div>
-
-                <div class="card" style="margin-top: 20px;">
-                    <h3 style="margin-bottom: 14px; color: var(--text); font-size: 0.95rem; font-weight: 600;">
-                        <i class="fas fa-calendar-week"></i> Dias da Semana por Tarefa
-                    </h3>
-                    <div class="table-responsive">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>Tarefa</th>
-                                    <th>Quantidade</th>
-                                    <th>Dias da Semana</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${tarefasOrdenadas.map(desc => {
-                                    const quantidade = tarefasPorDescricao[desc];
-                                    const dias = Array.from(diasSemanaPorTarefa[desc]).sort((a, b) => a - b);
-                                    const diasNomes = dias.map(d => DIAS_SEMANA[d]).join(', ');
-                                    return `
-                                        <tr>
-                                            <td><strong>${desc}</strong></td>
-                                            <td><span class="status-badge status-concluido">${quantidade}x</span></td>
-                                            <td>${diasNomes}</td>
-                                        </tr>
-                                    `;
-                                }).join('')}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            `;
-
-            // Criar gráfico
-            new Chart(document.getElementById('chartTarefasFuncionario'), {
-                type: 'bar',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: 'Quantidade de Realizações',
-                        data: data,
-                        backgroundColor: cores,
-                        borderRadius: 8
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                            padding: 12,
-                            titleColor: '#fff',
-                            bodyColor: '#fff'
-                        }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            grid: { color: 'rgba(0, 0, 0, 0.06)' },
-                            ticks: { 
-                                color: '#6b7280',
-                                stepSize: 1
-                            }
-                        },
-                        x: {
-                            grid: { display: false },
-                            ticks: { 
-                                color: '#6b7280',
-                                maxRotation: 45,
-                                minRotation: 45
-                            }
-                        }
-                    }
-                }
-            });
-
-            showToast('📊 Gráfico gerado com sucesso!', 'success');
-        }
-
-        // ============================
-        // TAREFAS (afazeres)
-        // ============================
-        function preencherSelectTarefaVendedor() {
-            const select = document.getElementById('tarefaVendedor');
-            select.innerHTML = '';
-            vendedores.forEach(v => {
-                const opt = document.createElement('option');
-                opt.value = v.id;
-                opt.textContent = v.nome;
-                select.appendChild(opt);
-            });
-        }
-
-        function preencherSelectTarefaDescricao() {
-            const select = document.getElementById('tarefaDescricao');
-            select.innerHTML = '<option value="">Selecione um afazer...</option>';
-            afazeresCadastrados.forEach(a => {
-                const opt = document.createElement('option');
-                opt.value = a.descricao;
-                opt.textContent = a.descricao;
-                select.appendChild(opt);
-            });
-        }
-
-        function atualizarRelatorioSeAtivo() {
-            if (document.getElementById('relatorios').classList.contains('active')) {
-                gerarRelatorio();
-            }
-        }
-
-        async function salvarTarefa(e) {
-            e.preventDefault();
-            const id = document.getElementById('tarefaId').value;
-            const vendedorId = parseInt(document.getElementById('tarefaVendedor').value);
-            const data = document.getElementById('tarefaData').value;
-            const descricao = document.getElementById('tarefaDescricao').value.trim();
-            const status = document.getElementById('tarefaStatus').value;
-
-            if (id) {
-                const t = tarefas.find(x => x.id == id);
-                if (t) {
-                    const oldDesc = t.descricao;
-                    t.vendedorId = vendedorId;
-                    t.data = data;
-                    t.descricao = descricao;
-                    t.status = status;
-                    
-                    // Atualizar também no array de registros para manter a consistência no relatório
-                    let registroAtualizado = false;
-                    registros.forEach(r => {
-                        if (r.data === data && r.vendedorId === vendedorId && Array.isArray(r.tarefas)) {
-                            if (r.tarefas.includes(oldDesc)) {
-                                r.tarefas = r.tarefas.map(tDesc => tDesc === oldDesc ? descricao : tDesc);
-                                registroAtualizado = true;
-                            }
-                        }
-                    });
-                    if (registroAtualizado) {
-                        await salvarRegistros();
-                    }
-                }
-            } else {
-                tarefas.push({
-                    id: Date.now(),
-                    vendedorId,
-                    data,
-                    descricao,
-                    status,
-                    timestamp: new Date().toISOString(),
-                    criadoEm: new Date()
-                });
-            }
-
-            await salvarTarefas();
-            closeTarefaModal();
-            renderTarefasLista();
-            renderDashboardEncarregado();
-            atualizarRelatorioSeAtivo();
-            showToast('Tarefa salva com sucesso!', 'success');
-        }
-
-        function editarTarefa(id) {
-            const t = tarefas.find(x => x.id === id);
-            if (!t) return;
-            if (isTaskLocked(t)) {
-                showToast('⚠️ Tarefa bloqueada: prazo de 72h expirado!', 'warning');
-                return;
-            }
-            document.getElementById('tarefaModalTitle').textContent = 'Editar Tarefa';
-            preencherSelectTarefaVendedor();
-            preencherSelectTarefaDescricao();
-            document.getElementById('tarefaId').value = t.id;
-            document.getElementById('tarefaVendedor').value = t.vendedorId;
-            document.getElementById('tarefaData').value = t.data;
-            document.getElementById('tarefaDescricao').value = t.descricao;
-            document.getElementById('tarefaStatus').value = t.status;
-            document.getElementById('tarefaModal').classList.add('active');
-        }
-
-        async function excluirTarefa(id) {
-            const t = tarefas.find(x => x.id === id);
-            if (t && isTaskLocked(t)) {
-                showToast('⚠️ Tarefa bloqueada: prazo de 72h expirado!', 'warning');
-                return;
-            }
-            customConfirm('Excluir esta tarefa?', '🗑️ Excluir tarefa').then(async (ok) => {
-                if (!ok) return;
-                
-                // Remover também do array de registros para manter a consistência no relatório
-                if (t) {
-                    registros.forEach(r => {
-                        if (r.data === t.data && r.vendedorId === t.vendedorId && Array.isArray(r.tarefas)) {
-                            r.tarefas = r.tarefas.filter(tDesc => tDesc !== t.descricao);
-                        }
-                    });
-                    await salvarRegistros();
-                }
-                
-                tarefas = tarefas.filter(task => task.id !== id);
-                await salvarTarefas();
-                renderTarefasLista();
-                renderDashboardEncarregado();
-                atualizarRelatorioSeAtivo();
-                showToast('Tarefa excluída!', 'success');
-            });
-        }
-
-        async function alternarStatusTarefa(id) {
-            const t = tarefas.find(x => x.id === id);
-            if (!t) return;
-            if (isTaskLocked(t)) {
-                showToast('⚠️ Tarefa bloqueada: prazo de 72h para alteração expirado!', 'warning');
-                return;
-            }
-            const statuses = ['pendente', 'em_andamento', 'concluido', 'nao_realizado'];
-            const currentIndex = statuses.indexOf(t.status);
-            t.status = statuses[(currentIndex + 1) % statuses.length];
-            await salvarTarefas();
-            renderTarefasLista();
-            renderDashboardEncarregado();
-            atualizarRelatorioSeAtivo();
-            showToast('Status atualizado!', 'success');
-        }
-
-        function renderTarefasLista() {
-            const container = document.getElementById('tarefasLista');
-            const fv = document.getElementById('filtroTarefaVendedor').value;
-            const fd = document.getElementById('filtroTarefaData').value;
-
-            let lista = [...tarefas];
-            if (fv) lista = lista.filter(t => t.vendedorId == fv);
-            if (fd) lista = lista.filter(t => t.data === fd);
-
-            if (lista.length === 0) {
-                container.innerHTML = `
-                    <div class="empty-state">
-                        <i class="fas fa-tasks"></i>
-                        <p>Nenhuma tarefa cadastrada</p>
-                    </div>
-                `;
-                return;
-            }
-
-            let html = `
-                <div class="table-responsive">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Data</th>
-                            <th>Funcionário</th>
-                            <th>Descrição</th>
-                            <th>Status</th>
-                            <th>Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-            `;
-
-            lista.sort((a, b) => new Date(b.data) - new Date(a.data)).forEach(t => {
-                const v = vendedores.find(x => x.id === t.vendedorId);
-                if (!v) return;
-                const dataF = new Date(t.data + 'T00:00:00').toLocaleDateString('pt-BR');
-                
-                let badgeClass = 'status-pendente';
-                let badgeText = 'Pendente';
-                let icon = 'fa-clock';
-                
-                if (t.status === 'concluido') { badgeClass = 'status-concluido'; badgeText = 'Concluído'; icon = 'fa-check'; }
-                else if (t.status === 'em_andamento') { badgeClass = 'status-em_andamento'; badgeText = 'Em andamento'; icon = 'fa-spinner'; }
-                else if (t.status === 'nao_realizado') { badgeClass = 'status-nao_realizado'; badgeText = 'Não realizado'; icon = 'fa-times'; }
-
-                const locked = isTaskLocked(t);
-                const lockedBadge = locked ? '<span class="status-badge status-bloqueado" style="margin-left:6px;"><i class="fas fa-lock"></i> Bloqueado</span>' : '';
-                const badge = `<span class="status-badge ${badgeClass}"><i class="fas ${icon}"></i> ${badgeText}</span>${lockedBadge}`;
-
-                const editBtn = locked 
-                    ? `<button class="btn btn-secondary btn-small" disabled title="Prazo de 72h expirado"><i class="fas fa-lock"></i> Bloqueado</button>`
-                    : `<button class="btn btn-secondary btn-small" onclick="editarTarefa(${t.id})"><i class="fas fa-edit"></i> Editar</button>`;
-                    
-                const deleteBtn = locked
-                    ? ``
-                    : `<button class="btn btn-danger btn-small" onclick="excluirTarefa(${t.id})"><i class="fas fa-trash"></i> Excluir</button>`;
-
-                const toggleBtn = locked
-                    ? `<button class="btn btn-secondary btn-small" disabled title="Prazo de 72h expirado"><i class="fas fa-lock"></i></button>`
-                    : `<button class="btn btn-secondary btn-small" onclick="alternarStatusTarefa(${t.id})" title="Alternar status"><i class="fas fa-exchange-alt"></i> Alternar</button>`;
-
-                html += `
-                    <tr>
-                        <td>${dataF}</td>
-                        <td style="color:${v.cor}; font-weight:600;">
-                            <i class="fas ${v.icone}"></i> ${v.nome}
-                        </td>
-                        <td>${t.descricao}</td>
-                        <td>${badge}</td>
-                        <td>
-                            <div class="actions">
-                                ${toggleBtn}
-                                ${editBtn}
-                                ${deleteBtn}
-                            </div>
-                        </td>
-                    </tr>
-                `;
-            });
-
-            html += '</tbody></table></div>';
-            container.innerHTML = html;
-        }
-
-        // ============================
-        // DASHBOARD DO ENCARREGADO
-        // ============================
-        function renderDashboardEncarregado() {
-            const container = document.getElementById('dashboardEncResultado');
-            if (!container) return;
-
-            const dataSelecionada = document.getElementById('dashboardData').value
-                || obterDataLocal();
-            const mesSelecionado = dataSelecionada.slice(0, 7);
-
-            const regsDia = registros.filter(r => r.data === dataSelecionada);
-            const regsMes = registros.filter(r => r.data.startsWith(mesSelecionado));
-            const tarefasDia = tarefas.filter(t => t.data === dataSelecionada);
-
-            const totalCashDia = regsDia.reduce((s, r) => s + r.cashback, 0);
-            const totalAvalDia = regsDia.reduce((s, r) => s + r.avaliacoes, 0);
-            const totalCashMes = regsMes.reduce((s, r) => s + r.cashback, 0);
-            const totalAvalMes = regsMes.reduce((s, r) => s + r.avaliacoes, 0);
-            const totalTarefas = tarefasDia.length;
-            const tarefasConcluidas = tarefasDia.filter(t => t.status === 'concluido').length;
-            const pctConcluidas = totalTarefas > 0 ? ((tarefasConcluidas / totalTarefas) * 100).toFixed(0) : 0;
-            
-            const pctCashMes = metaCashback > 0 ? ((totalCashMes / metaCashback) * 100).toFixed(1) : 0;
-            const pctAvalMes = metaAvaliacoes > 0 ? ((totalAvalMes / metaAvaliacoes) * 100).toFixed(1) : 0;
-
-            const dataF = new Date(dataSelecionada + 'T00:00:00').toLocaleDateString('pt-BR');
-
-            let html = `
-                <div class="dashboard-card" style="background: #eef2ff; border-color: #c7d2fe;">
-                    <h4><i class="fas fa-calendar-day"></i> Relatório do dia ${dataF}</h4>
-                    <div class="stats-grid">
-                        <div class="stat-card" style="border-top: 3px solid #4CAF50;">
-                            <i class="fas fa-gift" style="color:#4CAF50;"></i>
-                            <div class="value" style="color:#4CAF50;">${totalCashDia}</div>
-                            <div class="label">Cashback do dia</div>
-                        </div>
-                        <div class="stat-card" style="border-top: 3px solid #FFC107;">
-                            <i class="fas fa-star" style="color:#FFC107;"></i>
-                            <div class="value" style="color:#FFC107;">${totalAvalDia}</div>
-                            <div class="label">Avaliações do dia</div>
-                        </div>
-                        <div class="stat-card" style="border-top: 3px solid #667eea;">
-                            <i class="fas fa-gift" style="color:#667eea;"></i>
-                            <div class="value" style="color:#667eea;">${totalCashMes}</div>
-                            <div class="label">Cashback do mês (Meta: ${metaCashback} | ${pctCashMes}%)</div>
-                        </div>
-                        <div class="stat-card" style="border-top: 3px solid #e74c3c;">
-                            <i class="fas fa-star" style="color:#e74c3c;"></i>
-                            <div class="value" style="color:#e74c3c;">${totalAvalMes}</div>
-                            <div class="label">Avaliações do mês (Meta: ${metaAvaliacoes} | ${pctAvalMes}%)</div>
-                        </div>
-                        <div class="stat-card" style="border-top: 3px solid #2ecc71;">
-                            <i class="fas fa-tasks" style="color:#2ecc71;"></i>
-                            <div class="value" style="color:#2ecc71;">${tarefasConcluidas}/${totalTarefas}</div>
-                            <div class="label">Tarefas concluídas (${pctConcluidas}%)</div>
-                        </div>
-                    </div>
-                </div>
-            `;
-
-            html += '<h3 style="color:#1f2937; margin: 24px 0 14px; font-size:1rem; font-weight:600;"><i class="fas fa-user-clock"></i> Por funcionário</h3>';
-
-            if (vendedores.length === 0) {
-                html += '<div class="empty-state"><i class="fas fa-users-slash"></i><p>Nenhum funcionário cadastrado</p></div>';
-                container.innerHTML = html;
-                return;
-            }
-
-            vendedores.forEach(v => {
-                const regsV = regsDia.filter(r => r.vendedorId === v.id);
-                const tarefasV = tarefasDia.filter(t => t.vendedorId === v.id);
-                const cashV = regsV.reduce((s, r) => s + r.cashback, 0);
-                const avalV = regsV.reduce((s, r) => s + r.avaliacoes, 0);
-                const concV = tarefasV.filter(t => t.status === 'concluido').length;
-
-                html += `
-                    <div class="dashboard-card" style="border-left: 4px solid ${v.cor};">
-                        <h4 style="color:${v.cor};">
-                            <i class="fas ${v.icone}"></i> ${v.nome}
-                        </h4>
-                        <div class="totais-row">
-                            <span><i class="fas fa-gift"></i> Cashback: <strong>${cashV}</strong></span>
-                            <span><i class="fas fa-star"></i> Avaliações: <strong>${avalV}</strong></span>
-                            <span><i class="fas fa-tasks"></i> Tarefas: <strong>${concV}/${tarefasV.length}</strong></span>
-                        </div>
-                        <div style="margin-top: 15px;">
-                            ${tarefasV.length === 0
-                                ? '<p style="color:#9ca3af; font-style:italic;">Sem tarefas para este dia</p>'
-                                : tarefasV.map(t => {
-                                    let statusIcon = 'fa-circle';
-                                    let statusColor = '#ffc107';
-                                    let statusLabel = 'Pendente';
-                                    let isConcluida = '';
-                                    
-                                    if (t.status === 'concluido') {
-                                        statusIcon = 'fa-check-circle'; statusColor = '#4CAF50'; statusLabel = 'Concluído'; isConcluida = 'concluida';
-                                    } else if (t.status === 'em_andamento') {
-                                        statusIcon = 'fa-spinner'; statusColor = '#3b82f6'; statusLabel = 'Em andamento';
-                                    } else if (t.status === 'nao_realizado') {
-                                        statusIcon = 'fa-times-circle'; statusColor = '#ef4444'; statusLabel = 'Não realizado';
-                                    }
-                                    
-                                    return `
-                                    <div class="tarefa-item ${isConcluida}">
-                                        <div>
-                                            <i class="fas ${statusIcon}" style="color:${statusColor}; margin-right:8px;"></i>
-                                            ${t.descricao}
-                                        </div>
-                                        <span class="status-badge status-${t.status}">
-                                            ${statusLabel}
-                                        </span>
-                                    </div>
-                                    `;
-                                }).join('')
-                            }
-                        </div>
-                    </div>
-                `;
-            });
-
-            container.innerHTML = html;
-        }
-
-        function closeTarefaModal() {
-            document.getElementById('tarefaModal').classList.remove('active');
-        }
-
-        // ============================
-        // CADASTRO DE AFAZERES (templates)
-        // ============================
-        function renderDiasSemanaChecks() {
-            const c = document.getElementById('diasSemanaChecks');
-            if (!c) return;
-            c.innerHTML = DIAS_SEMANA.map((d, i) => `
-                <label style="display:flex; align-items:center; gap:5px; cursor:pointer;">
-                    <input type="checkbox" class="diaSemanaCheck" value="${i}">
-                    <span>${d}</span>
-                </label>
-            `).join('');
-        }
-
-        function abrirAfazerCadastroModal(afazer = null) {
-            const titulo = document.getElementById('afazerCadastroModalTitle');
-            renderDiasSemanaChecks();
-            if (afazer) {
-                titulo.textContent = '✏️ Editar Afazer';
-                document.getElementById('afazerCadastroId').value = afazer.id;
-                document.getElementById('afazerCadastroDescricao').value = afazer.descricao;
-                document.getElementById('afazerCadastroRecorrencia').value = afazer.recorrencia;
-                if (afazer.recorrencia === 'semanal' && afazer.diasSemana) {
-                    document.querySelectorAll('.diaSemanaCheck').forEach(ch => {
-                        ch.checked = afazer.diasSemana.includes(parseInt(ch.value));
-                    });
-                }
-            } else {
-                titulo.textContent = '➕ Cadastrar Afazer';
-                document.getElementById('afazerCadastroId').value = '';
-                document.getElementById('afazerCadastroDescricao').value = '';
-                document.getElementById('afazerCadastroRecorrencia').value = 'diaria';
-            }
-            document.getElementById('afazerDiasSemanaGroup').style.display =
-                document.getElementById('afazerCadastroRecorrencia').value === 'semanal' ? 'block' : 'none';
-            document.getElementById('afazerCadastroModal').classList.add('active');
-        }
-
-        async function salvarAfazerCadastro(e) {
-            e.preventDefault();
-            const id = document.getElementById('afazerCadastroId').value;
-            const descricao = document.getElementById('afazerCadastroDescricao').value.trim();
-            const recorrencia = document.getElementById('afazerCadastroRecorrencia').value;
-            let diasSemana = [];
-            if (recorrencia === 'semanal') {
-                diasSemana = Array.from(document.querySelectorAll('.diaSemanaCheck:checked')).map(c => parseInt(c.value));
-                if (diasSemana.length === 0) {
-                    showToast('⚠️ Selecione ao menos um dia da semana!', 'warning');
-                    return;
-                }
-            }
-            if (id) {
-                const a = afazeresCadastrados.find(x => x.id == id);
-                if (a) { a.descricao = descricao; a.recorrencia = recorrencia; a.diasSemana = diasSemana; }
-            } else {
-                afazeresCadastrados.push({
-                    id: Date.now(),
-                    descricao,
-                    recorrencia,
-                    diasSemana
-                });
-            }
-            await salvarAfazeresCadastrados();
-            closeAfazerCadastroModal();
-            renderAfazeresCadastroLista();
-            renderAfazeresCheckboxes();
-            showToast('✅ Afazer salvo!', 'success');
-        }
-
-        function editarAfazerCadastro(id) {
-            const a = afazeresCadastrados.find(x => x.id === id);
-            if (a) abrirAfazerCadastroModal(a);
-        }
-
-        async function excluirAfazerCadastro(id) {
-            customConfirm('Excluir este afazer cadastrado?', '🗑️ Excluir afazer').then(async (ok) => {
-                if (!ok) return;
-                afazeresCadastrados = afazeresCadastrados.filter(a => a.id !== id);
-                await salvarAfazeresCadastrados();
-                renderAfazeresCadastroLista();
-                renderAfazeresCheckboxes();
-                showToast('Afazer excluído!', 'success');
-            });
-        }
-
-        function renderAfazeresCadastroLista() {
-            const c = document.getElementById('afazeresCadastroLista');
-            if (!c) return;
-            if (afazeresCadastrados.length === 0) {
-                c.innerHTML = '<div class="empty-state">📭<p>Nenhum afazer cadastrado</p></div>';
-                return;
-            }
-            let html = `
-                <div class="table-responsive">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>📝 Descrição</th>
-                            <th>🔁 Recorrência</th>
-                            <th>📌 Dias</th>
-                            <th>⚙️ Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-            `;
-            afazeresCadastrados.forEach(a => {
-                let recLabel = '';
-                if (a.recorrencia === 'diaria') recLabel = '📅 Diária';
-                else if (a.recorrencia === 'semanal') recLabel = '🗓️ Semanal';
-                else recLabel = '🔹 Avulsa';
-                const dias = a.recorrencia === 'semanal' && a.diasSemana
-                    ? a.diasSemana.map(d => DIAS_SEMANA[d]).join(', ')
-                    : '—';
-                html += `
-                    <tr>
-                        <td>${a.descricao}</td>
-                        <td>${recLabel}</td>
-                        <td>${dias}</td>
-                        <td>
-                            <div class="actions">
-                                <button class="btn btn-secondary btn-small" onclick="editarAfazerCadastro(${a.id})">✏️ Editar</button>
-                                <button class="btn btn-danger btn-small" onclick="excluirAfazerCadastro(${a.id})">🗑️ Excluir</button>
-                            </div>
-                        </td>
-                    </tr>
-                `;
-            });
-            html += '</tbody></table></div>';
-            c.innerHTML = html;
-        }
-
-        function closeAfazerCadastroModal() {
-            document.getElementById('afazerCadastroModal').classList.remove('active');
-        }
-
-        // Funções de modal
-        function closeConfigModal() {
-            document.getElementById('configModal').classList.remove('active');
-        }
-
-        function closeEditarRegistroModal() {
-            document.getElementById('editarRegistroModal').classList.remove('active');
-        }
-
-        function verificarSenhaAba() {
-            const senha = document.getElementById('senhaAbaInput').value;
-            if (senha === SENHA_SISTEMA) {
-                closeSenhaAbaModal();
-                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-                document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
-                
-                // Determine which tab was requested (we can check which tab triggered it, but since we blocked it, we can just default to tarefas or gerenciar based on a flag, or simpler: just unlock both or check the last clicked tab. 
-                // Actually, a simpler way: we can store the requested tab in a variable.
-                if (requestedTab === 'tarefas') {
-                    tarefasDesbloqueado = true;
-                    document.querySelector('.tab[data-tab="tarefas"]').classList.add('active');
-                    document.getElementById('tarefas').classList.add('active');
-                    renderTarefasLista();
-                } else if (requestedTab === 'gerenciar') {
-                    gerenciarDesbloqueado = true;
-                    document.querySelector('.tab[data-tab="gerenciar"]').classList.add('active');
-                    document.getElementById('gerenciar').classList.add('active');
-                    renderGerenciarLista();
-                }
-                // Atualiza label e fecha drawer mobile
-                const _ativa = document.querySelector('.tab.active');
-                const _lbl = document.getElementById('tabsToggleLabel');
-                if (_ativa && _lbl) _lbl.textContent = _ativa.textContent.trim();
-                const _drawer = document.getElementById('adminTabs');
-                const _ov = document.getElementById('tabsOverlay');
-                if (_drawer) _drawer.classList.remove('open');
-                if (_ov) _ov.classList.remove('active');
-                showToast('✅ Acesso concedido!', 'success');
-            } else {
-                showToast('⚠️ Senha incorreta!', 'error');
-            }
-        }
-
-        let requestedTab = '';
-
-        function closeSenhaAbaModal() {
-            document.getElementById('senhaAbaModal').classList.remove('active');
-        }
-
-        function togglePassword() { /* removido */ }
-
-        // Inicializar
-        init();
+/* ============================================================
+   CONFIGURAÇÃO DO FIREBASE
+   ============================================================
+   1. Crie um projeto grátis em https://console.firebase.google.com
+   2. No projeto, ative o "Firestore Database" (modo produção).
+   3. Em "Configurações do projeto" > "Seus apps" > ícone </> (Web),
+      registre um app e copie o objeto de configuração que aparece
+      (algo parecido com o objeto abaixo) — cole no lugar deste.
+   4. Em Firestore Database > Regras, cole as regras sugeridas no
+      arquivo REGRAS_FIRESTORE.txt (enviado junto com este site) e
+      publique.
+   Sem isso preenchido, o site funciona normalmente (busca, placas
+   etc.) mas o like/deslike fica desativado.
+   ============================================================ */
+const firebaseConfig = {
+  apiKey: "AIzaSyCIhqKbJcGiVdI1VrGapRxDH3OcF-0E1CM",
+  authDomain: "adaptacao-de-peliculas.firebaseapp.com",
+  projectId: "adaptacao-de-peliculas",
+  storageBucket: "adaptacao-de-peliculas.firebasestorage.app",
+  messagingSenderId: "1015716132252",
+  appId: "1:1015716132252:web:910a222124c2628f73c459"
+};
+
+let db;
+try {
+  if (firebaseConfig.apiKey !== "COLE_AQUI_SUA_API_KEY" && typeof firebase !== 'undefined') {
+    firebase.initializeApp(firebaseConfig);
+    db = firebase.firestore();
+  } else {
+    console.warn('Firebase ainda não configurado — sistema de avaliação (like/deslike) desativado. Veja as instruções no topo do script.js.');
+  }
+} catch (e) {
+  console.error('Erro ao iniciar o Firebase:', e);
+}
+
+const dados = [
+/* ================= SAMSUNG ================= */
+{marca:"Samsung",modelo:"Galaxy J2 Prime",adaptacoes:["Sem Adaptação"]},
+{marca:"Samsung",modelo:"Galaxy J2 Core",adaptacoes:["Sem Adaptação"]},
+{marca:"Samsung",modelo:"Galaxy J4 2018",adaptacoes:["Sem Adaptação"]},
+{marca:"Samsung",modelo:"Galaxy J4 Core",adaptacoes:["Galaxy J4 Plus","Galaxy J6 Plus"]},
+{marca:"Samsung",modelo:"Galaxy J4 Plus",adaptacoes:["Galaxy J4 Core","Galaxy J6 Plus"]},
+{marca:"Samsung",modelo:"Galaxy J5",adaptacoes:["Sem Adaptação"]},
+{marca:"Samsung",modelo:"Galaxy J5 Prime",adaptacoes:["Sem Adaptação"]},
+{marca:"Samsung",modelo:"Galaxy J5 Pro",adaptacoes:["Sem Adaptação"]},
+{marca:"Samsung",modelo:"Galaxy J6 2018",adaptacoes:["Sem Adaptação"]},
+{marca:"Samsung",modelo:"Galaxy J6 Plus",adaptacoes:["Galaxy J4 Core","Galaxy J4 Plus"]},
+{marca:"Samsung",modelo:"Galaxy J7",adaptacoes:["Sem Adaptação"]},
+{marca:"Samsung",modelo:"Galaxy J7 Pro",adaptacoes:["Sem Adaptação"]},
+{marca:"Samsung",modelo:"Galaxy J7 Prime",adaptacoes:["Sem Adaptação"]},
+{marca:"Samsung",modelo:"Galaxy J8",adaptacoes:["Sem Adaptação"]},
+{marca:"Samsung",modelo:"Galaxy A2 Core",adaptacoes:["Sem Adaptação"]},
+{marca:"Samsung",modelo:"Galaxy A6 2018",adaptacoes:["Sem Adaptação"]},
+{marca:"Samsung",modelo:"Galaxy A6 Plus",adaptacoes:["Sem Adaptação"]},
+{marca:"Samsung",modelo:"Galaxy A7 2017",adaptacoes:["Sem Adaptação"]},
+{marca:"Samsung",modelo:"Galaxy A7 2018",adaptacoes:["Sem Adaptação"]},
+{marca:"Samsung",modelo:"Galaxy A8 2018",adaptacoes:["Sem Adaptação"]},
+{marca:"Samsung",modelo:"Galaxy A8 Plus",adaptacoes:["Sem Adaptação"]},
+{marca:"Samsung",modelo:"Galaxy A9 2018",adaptacoes:["Sem Adaptação"]},
+{marca:"Samsung",modelo:"Galaxy A01",adaptacoes:["Xiaomi Mi Play"]},
+{marca:"Samsung",modelo:"Galaxy A01 Core",adaptacoes:["Sem Adaptação"]},
+{marca:"Samsung",modelo:"Galaxy A02S",adaptacoes:["Galaxy A02","Galaxy A03","Galaxy A12","Galaxy A13","Galaxy M12"]},
+{marca:"Samsung",modelo:"Galaxy A03",adaptacoes:["Galaxy A02","Galaxy A02S","Galaxy A03S","Galaxy A03 Core","Galaxy A04","Galaxy A04S","Galaxy A04E","Galaxy A12","Galaxy A13"]},
+{marca:"Samsung",modelo:"Galaxy A03S",adaptacoes:["Galaxy A02","Galaxy A02S","Galaxy A03","Galaxy A03 Core","Galaxy A04","Galaxy A04S","Galaxy A04E","Galaxy A12","Galaxy A13"]},
+{marca:"Samsung",modelo:"Galaxy A03 Core",adaptacoes:["Galaxy A02","Galaxy A02S","Galaxy A03","Galaxy A03S","Galaxy A04","Galaxy A04S","Galaxy A04E","Galaxy A12","Galaxy A13"]},
+{marca:"Samsung",modelo:"Galaxy A04",adaptacoes:["Galaxy A02","Galaxy A02S","Galaxy A03","Galaxy A03S","Galaxy A03 Core","Galaxy A04S","Galaxy A04E","Galaxy A12","Galaxy A13","Galaxy M13"]},
+{marca:"Samsung",modelo:"Galaxy A04S",adaptacoes:["Galaxy A02","Galaxy A02S","Galaxy A03","Galaxy A03S","Galaxy A03 Core","Galaxy A04","Galaxy A04E","Galaxy A12","Galaxy A13","Galaxy M13"]},
+{marca:"Samsung",modelo:"Galaxy A04E",adaptacoes:["Galaxy A02","Galaxy A02S","Galaxy A03","Galaxy A03S","Galaxy A03 Core","Galaxy A04","Galaxy A04S","Galaxy A12","Galaxy A13"]},
+{marca:"Samsung",modelo:"Galaxy A07",adaptacoes:["Galaxy A05","Galaxy A06","Redmi 13C","Redmi C65"]},
+{marca:"Samsung",modelo:"Galaxy A10S",adaptacoes:["Galaxy A10","Galaxy M10","Moto G8 Play","Moto G8 Plus","Moto G7","LG K40S","Redmi 8","Redmi 8A"]},
+{marca:"Samsung",modelo:"Galaxy A16 4G",adaptacoes:["Galaxy A14","Galaxy A17","Galaxy M14"]},
+{marca:"Samsung",modelo:"Galaxy A21S",adaptacoes:["Galaxy A21","Galaxy A71","Moto G22","Redmi Note 11","Poco X3"]},
+{marca:"Samsung",modelo:"Galaxy A22",adaptacoes:["Galaxy A32 4G","Galaxy M31","Galaxy M32","Galaxy A33","Galaxy M22"]},
+{marca:"Samsung",modelo:"Galaxy A23 5G",adaptacoes:["Galaxy A12","Galaxy M12","Galaxy A02","Galaxy A03","Galaxy A03S","Galaxy A04","Galaxy A04E","Galaxy A04S","Galaxy A70","Galaxy A32","Galaxy A22"]},
+{marca:"Samsung",modelo:"Galaxy A30",adaptacoes:["Galaxy A20","Galaxy A50","Galaxy A30S","Galaxy A50S","Galaxy M31","Galaxy M30S"]},
+{marca:"Samsung",modelo:"Galaxy A30S",adaptacoes:["Galaxy A20","Galaxy A30","Galaxy A50","Galaxy A50S","Galaxy M31","Galaxy M30S"]},
+{marca:"Samsung",modelo:"Galaxy A31",adaptacoes:["Galaxy A22 4G","Galaxy A32 4G","Galaxy M31","Galaxy M32","Galaxy A33","Galaxy M22"]},
+{marca:"Samsung",modelo:"Galaxy A32",adaptacoes:["Galaxy A22 4G","Galaxy A33","Galaxy M32","Poco M2"]},
+{marca:"Samsung",modelo:"Galaxy A32 5G",adaptacoes:["Galaxy A22 5G","Galaxy M14","Galaxy A14"]},
+{marca:"Samsung",modelo:"Galaxy A50S",adaptacoes:["Galaxy A20","Galaxy A30","Galaxy A50","Galaxy A30S"]},
+{marca:"Samsung",modelo:"Galaxy A52",adaptacoes:["Galaxy A51","Galaxy A52S","Galaxy A53 5G","Galaxy S20 FE"]},
+{marca:"Samsung",modelo:"Galaxy A52S",adaptacoes:["Galaxy A51","Galaxy A52","Galaxy A53 5G","Galaxy S20 FE"]},
+{marca:"Samsung",modelo:"Galaxy A53 5G",adaptacoes:["Galaxy A52","Galaxy A52S","Galaxy S20 FE","Moto Edge 30","Poco M4 Pro 4G"]},
+{marca:"Samsung",modelo:"Galaxy A55 5G",adaptacoes:["Galaxy A35","Galaxy M35","Galaxy A56"]},
+{marca:"Samsung",modelo:"Galaxy A02",adaptacoes:["Galaxy A02S","Galaxy A03","Galaxy A03S","Galaxy A03 Core","Galaxy A04","Galaxy A04S","Galaxy A04E","Galaxy A12","Galaxy A13","Galaxy M23","Galaxy A70","Redmi 9A","Redmi 9A Sport","Redmi 9i","Redmi 9C","Moto E7","Moto E7 Power","Poco M4"]},
+{marca:"Samsung",modelo:"Galaxy A05",adaptacoes:["Galaxy A05S","Galaxy A06","Galaxy A07","Redmi 13C","Redmi C65","TCL 40","Realme C33","Realme Note 50","Realme Note 60"]},
+{marca:"Samsung",modelo:"Galaxy A05S",adaptacoes:["Galaxy A05","Redmi 13C","Redmi C65","TCL 40","Realme C33","Realme Note 50","Realme Note 60"]},
+{marca:"Samsung",modelo:"Galaxy A06",adaptacoes:["Galaxy A05","Galaxy A07","Redmi 13C","Redmi C65"]},
+{marca:"Samsung",modelo:"Galaxy A10",adaptacoes:["Galaxy A10S","Galaxy M10","Moto G8 Play","Moto G8 Plus","Moto G7","LG K40S","Redmi 8","Redmi 8A"]},
+{marca:"Samsung",modelo:"Galaxy A11",adaptacoes:["Moto G41","Moto G51","Moto G52","Redmi Note 10","Redmi 11 Lite","Redmi Note 9","Realme 7","Realme 7 Pro"]},
+{marca:"Samsung",modelo:"Galaxy A12",adaptacoes:["Galaxy M12","Galaxy A02","Galaxy A02S","Galaxy A03","Galaxy A03 Core","Galaxy A03S","Galaxy A04","Galaxy A04E","Galaxy A04S","Galaxy A13","Galaxy A23 5G","Galaxy A70","Moto E7","Moto E7 Power"]},
+{marca:"Samsung",modelo:"Galaxy A13",adaptacoes:["Galaxy M13","Galaxy A12","Galaxy M12","Galaxy A02","Galaxy A02S","Galaxy A03","Galaxy A03 Core","Galaxy A03S","Galaxy A04","Galaxy A04E","Galaxy A04S","Galaxy A23","Galaxy A70","Moto E7","Moto E7 Power"]},
+{marca:"Samsung",modelo:"Galaxy A14",adaptacoes:["Galaxy A22 5G","Galaxy M14","Moto One Fusion","Galaxy A16 4G","Galaxy A16"]},
+{marca:"Samsung",modelo:"Galaxy A15",adaptacoes:["Galaxy A25","Galaxy M15","Galaxy M24","Galaxy M25","Galaxy A34"]},
+{marca:"Samsung",modelo:"Galaxy A16",adaptacoes:["Galaxy A14","Galaxy A17","Galaxy A26"]},
+{marca:"Samsung",modelo:"Galaxy A17",adaptacoes:["Galaxy A16","Galaxy A26","Galaxy A14"]},
+{marca:"Samsung",modelo:"Galaxy A20",adaptacoes:["Galaxy A30","Galaxy A50","Galaxy A30S","Galaxy A50S","Galaxy M31","Galaxy M30S"]},
+{marca:"Samsung",modelo:"Galaxy A20S",adaptacoes:["Galaxy A32 5G","Moto One Fusion"]},
+{marca:"Samsung",modelo:"Galaxy A21",adaptacoes:["Galaxy A21S","Galaxy A71","Moto G22","Redmi Note 11","Poco X3"]},
+{marca:"Samsung",modelo:"Galaxy A22 4G",adaptacoes:["Galaxy A31","Galaxy A32 4G","Galaxy M31","Galaxy M32","Galaxy A33","Galaxy M22"]},
+{marca:"Samsung",modelo:"Galaxy A22 5G",adaptacoes:["Galaxy A32 5G","Galaxy A14","Galaxy M14"]},
+{marca:"Samsung",modelo:"Galaxy A23",adaptacoes:["Galaxy A02","Galaxy A02S","Galaxy A03","Galaxy A03 Core","Galaxy A03S","Galaxy A04","Galaxy A04E","Galaxy A04S","Galaxy A70","Galaxy A32","Galaxy A22","Realme C2"]},
+{marca:"Samsung",modelo:"Galaxy A24",adaptacoes:["iPhone 15 Pro Max","Galaxy A25","Galaxy A15","Galaxy M15"]},
+{marca:"Samsung",modelo:"Galaxy A25",adaptacoes:["iPhone 15 Pro Max","Galaxy A24","Galaxy A15","Galaxy M15"]},
+{marca:"Samsung",modelo:"Galaxy A26",adaptacoes:["Galaxy A16","Galaxy A17"]},
+{marca:"Samsung",modelo:"Galaxy A32 4G",adaptacoes:["Galaxy A22 4G","Galaxy A33","Galaxy M32","Poco M2"]},
+{marca:"Samsung",modelo:"Galaxy A33",adaptacoes:["Galaxy M21S","Galaxy M31","Galaxy M22","Galaxy M32","Galaxy A31","Galaxy A32 4G"]},
+{marca:"Samsung",modelo:"Galaxy A34",adaptacoes:["iPhone 14 Pro Max","Galaxy M34","Galaxy M15"]},
+{marca:"Samsung",modelo:"Galaxy A35",adaptacoes:["Galaxy A56","Galaxy S24 FE","Galaxy A55 5G","Galaxy M35"]},
+{marca:"Samsung",modelo:"Galaxy A36",adaptacoes:["Galaxy A37","Galaxy A56","Galaxy S24 FE"]},
+{marca:"Samsung",modelo:"Galaxy A37",adaptacoes:["Galaxy A36","Galaxy A56","Galaxy S24 FE"]},
+{marca:"Samsung",modelo:"Galaxy A41",adaptacoes:["Sem Adaptação"]},
+{marca:"Samsung",modelo:"Galaxy A50",adaptacoes:["Galaxy A20","Galaxy A30","Galaxy A50S","Galaxy A30S"]},
+{marca:"Samsung",modelo:"Galaxy A51",adaptacoes:["Galaxy A52","Galaxy A52S","Galaxy A53 5G","Galaxy S20 FE"]},
+{marca:"Samsung",modelo:"Galaxy A53",adaptacoes:["Galaxy A52S","Galaxy S20 FE","Moto Edge 30","Poco M4 Pro 4G"]},
+{marca:"Samsung",modelo:"Galaxy A54",adaptacoes:["Galaxy S21 FE","Galaxy S23 FE"]},
+{marca:"Samsung",modelo:"Galaxy A55",adaptacoes:["Galaxy A35","Galaxy M35"]},
+{marca:"Samsung",modelo:"Galaxy A56",adaptacoes:["Galaxy A36","Galaxy S24 FE","Galaxy A57"]},
+{marca:"Samsung",modelo:"Galaxy A57",adaptacoes:["Galaxy A36","Galaxy S24 FE","Galaxy A56"]},
+{marca:"Samsung",modelo:"Galaxy A70",adaptacoes:["Galaxy A12","Galaxy M12","Galaxy A02","Galaxy A03","Galaxy A03S","Galaxy A03 Core","Galaxy A13"]},
+{marca:"Samsung",modelo:"Galaxy A71",adaptacoes:["Galaxy A21","Galaxy A21S","Moto G22","Redmi Note 11","Poco X3","Galaxy M62"]},
+{marca:"Samsung",modelo:"Galaxy A72",adaptacoes:["Galaxy A52","Galaxy A52S","Galaxy S20 FE"]},
+{marca:"Samsung",modelo:"Galaxy A73",adaptacoes:["Galaxy A53","Galaxy A54","Galaxy S21 FE"]},
+{marca:"Samsung",modelo:"Galaxy A80",adaptacoes:["Infinix Note 12 Pro 5G"]},
+{marca:"Samsung",modelo:"Galaxy M12",adaptacoes:["Galaxy A12","Galaxy A02","Galaxy A02S","Galaxy A03","Galaxy A03S","Galaxy A04","Galaxy A04S","Galaxy A13"]},
+{marca:"Samsung",modelo:"Galaxy M13",adaptacoes:["Galaxy A13","Galaxy A12","Galaxy A04","Galaxy A04S"]},
+{marca:"Samsung",modelo:"Galaxy M14",adaptacoes:["Galaxy A14","Galaxy A22 5G"]},
+{marca:"Samsung",modelo:"Galaxy M15",adaptacoes:["Galaxy A15","Galaxy A24","Galaxy A25"]},
+{marca:"Samsung",modelo:"Galaxy M10",adaptacoes:["Galaxy A10","Galaxy A10S","Moto G8 Play","Moto G8 Plus"]},
+{marca:"Samsung",modelo:"Galaxy M20",adaptacoes:["Sem Adaptação"]},
+{marca:"Samsung",modelo:"Galaxy M21S",adaptacoes:["Galaxy A20","Galaxy M31","Galaxy A30","Galaxy A50","Galaxy A30s","Galaxy A50s"]},
+{marca:"Samsung",modelo:"Galaxy M24",adaptacoes:["Galaxy A15","Galaxy A24","Galaxy A25","Galaxy M15"]},
+{marca:"Samsung",modelo:"Galaxy M25",adaptacoes:["Galaxy A15","Galaxy A24","Galaxy A25","Galaxy M15"]},
+{marca:"Samsung",modelo:"Galaxy M30S",adaptacoes:["Galaxy A20","Galaxy A30","Galaxy A50","Galaxy A30S","Galaxy M31"]},
+{marca:"Samsung",modelo:"Galaxy S20 FE",adaptacoes:["Galaxy A51","Galaxy A52","Galaxy A52S","Galaxy A53 5G"]},
+{marca:"Samsung",modelo:"Galaxy S21 FE",adaptacoes:["Galaxy A54","Galaxy A73","Galaxy S23 FE"]},
+{marca:"Samsung",modelo:"Galaxy S23 FE",adaptacoes:["Galaxy A54","Galaxy S21 FE"]},
+
+/* ===== Modelos que já eram citados como adaptação de outros aparelhos, mas ainda
+   não tinham ficha própria (por isso não apareciam numa busca direta pelo nome
+   deles). Geradas automaticamente a partir das relações já existentes no arquivo,
+   revise se quiser completar com mais compatibilidades. ===== */
+{marca:"Xiaomi",modelo:"Redmi C65",adaptacoes:["Galaxy A07","Galaxy A05","Galaxy A05S","Galaxy A06","TCL 40"]},
+{marca:"Motorola",modelo:"Moto G8 Play",adaptacoes:["Galaxy A10S","Galaxy A10","Galaxy M10","Moto G8 Plus","Moto One Macro","LG K40S"]},
+{marca:"Xiaomi",modelo:"Redmi 8",adaptacoes:["Galaxy A10S","Galaxy A10","LG K40S"]},
+{marca:"Xiaomi",modelo:"Redmi 8A",adaptacoes:["Galaxy A10S","Galaxy A10","LG K40S"]},
+{marca:"Xiaomi",modelo:"Poco X3",adaptacoes:["Galaxy A21S","Galaxy A21","Galaxy A71","Redmi Mi 11i","Poco X3 GT","Poco X4","Poco X4 Pro","Poco X4 GT","LG K61"]},
+{marca:"Xiaomi",modelo:"Poco M4 Pro 4G",adaptacoes:["Galaxy A53 5G","Galaxy A53"]},
+{marca:"Xiaomi",modelo:"Redmi 11 Lite",adaptacoes:["Galaxy A11"]},
+{marca:"Realme",modelo:"Realme 7 Pro",adaptacoes:["Galaxy A11"]},
+{marca:"Motorola",modelo:"Moto G04",adaptacoes:["Moto E14","Infinix Smart 8","Infinix Smart 8 Pro","Infinix Hot 40i"]},
+{marca:"Motorola",modelo:"Moto G24",adaptacoes:["Moto E14","Infinix Smart 8","Infinix Smart 8 Pro","Infinix Hot 40","Infinix Hot 40i"]},
+{marca:"Motorola",modelo:"Moto G05",adaptacoes:["Moto E15","Moto G17","Moto G35","Moto G56","Realme C75"]},
+{marca:"Motorola",modelo:"Moto G15",adaptacoes:["Moto E15","Moto G17","Moto G35","Moto G56","Infinix Note 60i","Realme C75"]},
+{marca:"Motorola",modelo:"Moto E5",adaptacoes:["Moto G5G Plus"]},
+{marca:"Motorola",modelo:"Moto 9 Play",adaptacoes:["Moto G9"]},
+{marca:"Apple",modelo:"iPhone SE 2ºG",adaptacoes:["iPhone 7•8"]},
+{marca:"Apple",modelo:"iPhone XS",adaptacoes:["iPhone X"]},
+{marca:"Apple",modelo:"iPhone 11 Pro",adaptacoes:["iPhone X"]},
+{marca:"Apple",modelo:"iPhone 11 Pro Max",adaptacoes:["iPhone XS Max"]},
+{marca:"Apple",modelo:"iPhone 13",adaptacoes:["iPhone 14","iPhone 16E"]},
+{marca:"Apple",modelo:"iPhone 13 Pro",adaptacoes:["iPhone 16E"]},
+{marca:"Xiaomi",modelo:"Redmi 13",adaptacoes:["Redmi 12","Poco C65"]},
+{marca:"Xiaomi",modelo:"Redmi Poco M6",adaptacoes:["Redmi 12","Poco C65","Redmi 12•13"]},
+{marca:"Xiaomi",modelo:"Redmi Mi 8 Lite",adaptacoes:["Redmi 8 Lite","Xiaomi Note 6 Pro"]},
+{marca:"Xiaomi",modelo:"Poco X3 Pro",adaptacoes:["Redmi Mi 11i","Poco X3 GT","Poco X4","Poco X4 Pro","Poco X4 GT","LG K61"]},
+{marca:"Xiaomi",modelo:"Redmi Note 8",adaptacoes:["Redmi Note 7"]},
+{marca:"Xiaomi",modelo:"Poco X6",adaptacoes:["Poco X6 Pro","Poco F6•F6 Pro"]},
+{marca:"Xiaomi",modelo:"Redmi Note 13",adaptacoes:["Redmi Note 13 Pro","Redmi 13T","Redmi 13T Pro"]},
+{marca:"Xiaomi",modelo:"Redmi MI 13T",adaptacoes:["Redmi Note 13 Pro","Redmi Note 13•13 Pro"]},
+{marca:"Xiaomi",modelo:"Redmi MI 13T Pro",adaptacoes:["Redmi Note 13 Pro","Redmi Note 13•13 Pro"]},
+{marca:"Xiaomi",modelo:"Redmi 10",adaptacoes:["Poco M3 Pro"]},
+{marca:"Xiaomi",modelo:"Xiaomi 12T",adaptacoes:["Xiaomi 14T"]},
+{marca:"Samsung",modelo:"Galaxy M21",adaptacoes:["Galaxy A21","Galaxy A21S"]},
+{marca:"Samsung",modelo:"Galaxy M22",adaptacoes:["Galaxy A22","Galaxy A32 4G"]},
+{marca:"Samsung",modelo:"Galaxy M23",adaptacoes:["Galaxy A13","Galaxy A23","Galaxy A32 5G"]},
+{marca:"Samsung",modelo:"Galaxy M31",adaptacoes:["Galaxy A20","Galaxy A30","Galaxy A31","Galaxy A32"]},
+{marca:"Samsung",modelo:"Galaxy M32",adaptacoes:["Galaxy A22","Galaxy A32 4G"]},
+{marca:"Samsung",modelo:"Galaxy M34",adaptacoes:["Galaxy A34","Galaxy A54"]},
+{marca:"Samsung",modelo:"Galaxy M35",adaptacoes:["Galaxy A35","Galaxy A55"]},
+{marca:"Samsung",modelo:"Galaxy M51",adaptacoes:["Galaxy M62"]},
+{marca:"Samsung",modelo:"Galaxy M52",adaptacoes:["Galaxy M62"]},
+{marca:"Samsung",modelo:"Galaxy M54",adaptacoes:["Galaxy M62"]},
+{marca:"Samsung",modelo:"Galaxy M55",adaptacoes:["Galaxy M62"]},
+{marca:"Samsung",modelo:"Galaxy M62",adaptacoes:["Galaxy M51","Galaxy M52","Galaxy M54","Galaxy M55","Galaxy A71"]},
+{marca:"Samsung",modelo:"Galaxy S8•S9",adaptacoes:["Sem Adaptação"]},
+{marca:"Samsung",modelo:"Galaxy S8 Plus•S9 Plus",adaptacoes:["Sem Adaptação"]},
+{marca:"Samsung",modelo:"Galaxy S10",adaptacoes:["Sem Adaptação"]},
+{marca:"Samsung",modelo:"Galaxy S10 Plus",adaptacoes:["Sem Adaptação"]},
+{marca:"Samsung",modelo:"Galaxy S10E",adaptacoes:["Sem Adaptação"]},
+{marca:"Samsung",modelo:"Galaxy S10 Lite",adaptacoes:["Sem Adaptação"]},
+{marca:"Samsung",modelo:"Galaxy S20",adaptacoes:["Sem Adaptação"]},
+{marca:"Samsung",modelo:"Galaxy S20 Plus",adaptacoes:["Sem Adaptação"]},
+{marca:"Samsung",modelo:"Galaxy S20 Ultra",adaptacoes:["Sem Adaptação"]},
+{marca:"Samsung",modelo:"Galaxy S21",adaptacoes:["Sem Adaptação"]},
+{marca:"Samsung",modelo:"Galaxy S21 Plus",adaptacoes:["Sem Adaptação"]},
+{marca:"Samsung",modelo:"Galaxy S21 Ultra",adaptacoes:["Sem Adaptação"]},
+{marca:"Samsung",modelo:"Galaxy S22",adaptacoes:["Sem Adaptação"]},
+{marca:"Samsung",modelo:"Galaxy S22 Plus",adaptacoes:["Sem Adaptação"]},
+{marca:"Samsung",modelo:"Galaxy S22 Ultra",adaptacoes:["Sem Adaptação"]},
+{marca:"Samsung",modelo:"Galaxy S23",adaptacoes:["Sem Adaptação"]},
+{marca:"Samsung",modelo:"Galaxy S23 Plus",adaptacoes:["Sem Adaptação"]},
+{marca:"Samsung",modelo:"Galaxy S24",adaptacoes:["Sem Adaptação"]},
+{marca:"Samsung",modelo:"Galaxy S24 Plus",adaptacoes:["Sem Adaptação"]},
+{marca:"Samsung",modelo:"Galaxy S24 Ultra",adaptacoes:["Sem Adaptação"]},
+{marca:"Samsung",modelo:"Galaxy S24 FE",adaptacoes:["Galaxy A35","Galaxy A36","Galaxy A56","Galaxy A57"]},
+{marca:"Samsung",modelo:"Galaxy S25",adaptacoes:["Sem Adaptação"]},
+{marca:"Samsung",modelo:"Galaxy S25 Plus",adaptacoes:["Sem Adaptação"]},
+{marca:"Samsung",modelo:"Galaxy S25 Ultra",adaptacoes:["Sem Adaptação"]},
+{marca:"Samsung",modelo:"Galaxy S25 FE",adaptacoes:["Sem Adaptação"]},
+{marca:"Samsung",modelo:"Galaxy S26",adaptacoes:["Sem Adaptação"]},
+{marca:"Samsung",modelo:"Galaxy S26 Plus",adaptacoes:["Sem Adaptação"]},
+{marca:"Samsung",modelo:"Galaxy S26 Ultra",adaptacoes:["Sem Adaptação"]},
+{marca:"Samsung",modelo:"Galaxy S26 Edge",adaptacoes:["Sem Adaptação"]},
+{marca:"Samsung",modelo:"Galaxy Note 10",adaptacoes:["Sem Adaptação"]},
+{marca:"Samsung",modelo:"Galaxy Note 10 Plus",adaptacoes:["Sem Adaptação"]},
+{marca:"Samsung",modelo:"Galaxy Note 10 Lite",adaptacoes:["Sem Adaptação"]},
+{marca:"Samsung",modelo:"Galaxy Note 20",adaptacoes:["Sem Adaptação"]},
+{marca:"Samsung",modelo:"Galaxy Note 20 Ultra",adaptacoes:["Sem Adaptação"]},
+
+/* ================= MOTOROLA ================= */
+{marca:"Motorola",modelo:"Moto E5 Play",adaptacoes:["Sem Adaptação"]},
+{marca:"Motorola",modelo:"Moto E5 Plus",adaptacoes:["Sem Adaptação"]},
+{marca:"Motorola",modelo:"Moto E6",adaptacoes:["Sem Adaptação"]},
+{marca:"Motorola",modelo:"Moto E6i",adaptacoes:["Moto E6S","Moto E6 Plus","Moto E7","Moto E20","Moto G9 Play","Moto E7 Power","Galaxy A13","Galaxy A23","Galaxy A12","Moto G30"]},
+{marca:"Motorola",modelo:"Moto E6 Plus",adaptacoes:["Moto E6i","Moto E6S","Moto E7","Moto E20","Moto G9 Play","Moto E7 Power","Galaxy A13","Galaxy A23","Galaxy A12","Moto G30"]},
+{marca:"Motorola",modelo:"Moto E6S",adaptacoes:["Moto E6i","Moto E6 Plus","Moto E7","Moto E20","Moto G9 Play","Moto E7 Power","Galaxy A13","Galaxy A23","Galaxy A12","Moto G30","Moto E20"]},
+{marca:"Motorola",modelo:"Moto E7 Power",adaptacoes:["Moto E7","Galaxy A02","Galaxy A03","Galaxy A12","Galaxy A13","Galaxy M12","Moto E6i","Moto E6 Plus","Moto E6S"]},
+{marca:"Motorola",modelo:"Moto E7",adaptacoes:["Moto E7 Power","Galaxy A02","Galaxy A03","Galaxy A12","Galaxy A13","Galaxy M12"]},
+{marca:"Motorola",modelo:"Moto E14",adaptacoes:["Moto G04","Moto G24","Moto G34"]},
+{marca:"Motorola",modelo:"Moto E30",adaptacoes:["Moto E13","Moto E20","Moto G9 Play","Galaxy A02S","Moto G30","Moto E7 Power","Moto One Fusion","Realme C11","Galaxy A12","Galaxy A70"]},
+{marca:"Motorola",modelo:"Moto E7 Plus",adaptacoes:["Sem Adaptação"]},
+{marca:"Motorola",modelo:"Moto E13",adaptacoes:["Moto E20","Moto E30","Moto G9 Play","Galaxy A02S","Moto G30","Moto E7 Power","Moto One Fusion","Realme C11","Galaxy A12","Galaxy A70"]},
+{marca:"Motorola",modelo:"Moto E15",adaptacoes:["Moto G05","Moto G15","Moto G35"]},
+{marca:"Motorola",modelo:"Moto E20",adaptacoes:["Galaxy A07","Moto E7","Redmi 9A","Redmi 9A Sport","Redmi 9i","Galaxy A12","Galaxy M34","Galaxy M12"]},
+{marca:"Motorola",modelo:"Moto E22",adaptacoes:["Sem Adaptação"]},
+{marca:"Motorola",modelo:"Moto E32",adaptacoes:["Moto G22","Moto Edge 20"]},
+{marca:"Motorola",modelo:"Moto E40",adaptacoes:["Sem Adaptação"]},
+{marca:"Motorola",modelo:"Moto G 5G",adaptacoes:["Sem Adaptação"]},
+{marca:"Motorola",modelo:"Moto G 5G PLus",adaptacoes:["Moto G100"]},
+{marca:"Motorola",modelo:"Moto G04•G24",adaptacoes:["Moto G34","Moto E14"]},
+{marca:"Motorola",modelo:"Moto G5",adaptacoes:["Sem Adaptação"]},
+{marca:"Motorola",modelo:"Moto G5S",adaptacoes:["Sem Adaptação"]},
+{marca:"Motorola",modelo:"Moto G5S Plus",adaptacoes:["Sem Adaptação"]},
+{marca:"Motorola",modelo:"Moto G5 Plus",adaptacoes:["Sem Adaptação"]},
+{marca:"Motorola",modelo:"Moto G05•G15",adaptacoes:["Moto G17","Moto G35","Moto G56"]},
+{marca:"Motorola",modelo:"Moto G5G",adaptacoes:["Moto Edge 20"]},
+{marca:"Motorola",modelo:"Moto G5G Plus",adaptacoes:["Moto E5"]},
+{marca:"Motorola",modelo:"G06",adaptacoes:["Redmi 14C","Poco C75","Poco C71","Redmi A5"]},
+{marca:"Motorola",modelo:"Moto G6",adaptacoes:["Sem Adaptação"]},
+{marca:"Motorola",modelo:"Moto G6 Plus",adaptacoes:["Sem Adaptação"]},
+{marca:"Motorola",modelo:"Moto G6 Play",adaptacoes:["Sem Adaptação"]},
+{marca:"Motorola",modelo:"Moto G7",adaptacoes:["Moto G7 Plus"]},
+{marca:"Motorola",modelo:"Moto G7 Plus",adaptacoes:["Moto G7","Moto G8 Power"]},
+{marca:"Motorola",modelo:"Moto G7 Play",adaptacoes:["Sem Adaptação"]},
+{marca:"Motorola",modelo:"Moto G7 Power",adaptacoes:["Sem Adaptação"]},
+{marca:"Motorola",modelo:"Moto G8",adaptacoes:["Moto G8 Power Lite","Moto G9 Play"]},
+{marca:"Motorola",modelo:"Moto G8 Plus",adaptacoes:["Moto G8 Play","Moto One Macro","Moto G8 Power"]},
+{marca:"Motorola",modelo:"Moto G8 Power",adaptacoes:["Moto G7 Plus","Moto G8 Plus"]},
+{marca:"Motorola",modelo:"Moto G9 Play",adaptacoes:["Moto G8","Moto G8 Power Lite","Moto G10","Moto G20","Moto G30","Moto E20","Galaxy A12","Moto E6i","Moto E6 Plus","Moto E6S","Moto E7 Power"]},
+{marca:"Motorola",modelo:"Moto G20",adaptacoes:["Moto G10","Moto G10 Power","Moto G30","Moto G8 Power Lite","Galaxy A12","Galaxy A70","Moto G9 Play"]},
+{marca:"Motorola",modelo:"Moto G30",adaptacoes:["Moto G10","Moto G10 Power","Moto G20","Moto G8 Power Lite","Galaxy A12","Galaxy A70","Moto E6i","Moto E6 Plus","Moto E6S","Moto E13","Moto E30"]},
+{marca:"Motorola",modelo:"Moto G41",adaptacoes:["Moto G31","Moto G71","Redmi Note 9S","Redmi Note 9 Pro"]},
+{marca:"Motorola",modelo:"Moto G45",adaptacoes:["Moto G34","Moto G13"]},
+{marca:"Motorola",modelo:"Moto G53 5G",adaptacoes:["Moto G23","Moto G13","Moto G53"]},
+{marca:"Motorola",modelo:"Moto G60S",adaptacoes:["Moto G60","Redmi 10C","Moto G9+"]},
+{marca:"Motorola",modelo:"Moto G84 5G",adaptacoes:["Moto G54","Moto G14","Moto G84"]},
+{marca:"Motorola",modelo:"Moto G9+",adaptacoes:["Moto G60","Redmi 10C","Moto G60S","Moto G200"]},
+{marca:"Motorola",modelo:"Moto Edge 20 Lite",adaptacoes:["Moto Edge 20","Moto Edge 30X","Moto Edge 30 Pro"]},
+{marca:"Motorola",modelo:"Moto Edge 30 Pro",adaptacoes:["Moto Edge 20 Lite","Moto Edge 30X","Moto Edge 20"]},
+{marca:"Motorola",modelo:"Moto Edge 30X",adaptacoes:["Moto Edge 20 Lite","Moto Edge 30 Pro","Moto Edge 20"]},
+{marca:"Motorola",modelo:"Moto One Action",adaptacoes:["Moto One Avision"]},
+{marca:"Motorola",modelo:"Moto One Macro",adaptacoes:["Moto G8 Play","Moto G8 Plus"]},
+{marca:"Motorola",modelo:"Moto G8 Power Lite",adaptacoes:["Moto G8","Moto G9 Play","Moto G10","Moto G20","Moto G30","Moto E20","Galaxy A12"]},
+{marca:"Motorola",modelo:"Moto G9",adaptacoes:["Moto 9 Play","Redmi 9A","Redmi 9A Sport","Redmi 9i","Galaxy A23 5G","Galaxy A32 5G","Moto G20","Moto G30","Moto G50","Moto G10 Power","Moto One Fusion","Galaxy M12"]},
+{marca:"Motorola",modelo:"Moto G9 Plus",adaptacoes:["Sem Adaptação"]},
+{marca:"Motorola",modelo:"Moto G9 Power",adaptacoes:["Moto G200"]},
+{marca:"Motorola",modelo:"Moto G10",adaptacoes:["Moto G10 Power","Moto G20","Moto G30","Moto G8 Power Lite","Galaxy A12","Galaxy A70"]},
+{marca:"Motorola",modelo:"Moto G10 Power",adaptacoes:["Galaxy A12","Galaxy A70","Redmi 9A","Redmi 9C","Redmi 9A Sport"]},
+{marca:"Motorola",modelo:"Moto G13",adaptacoes:["Moto G14","Moto G23","Moto G53","Moto G42","Moto G62"]},
+{marca:"Motorola",modelo:"Moto G14",adaptacoes:["Moto G62","Moto G53","Moto G54"]},
+{marca:"Motorola",modelo:"Moto G17",adaptacoes:["Moto G05","Moto G15","Moto G35","Moto G56"]},
+{marca:"Motorola",modelo:"Moto G22",adaptacoes:["Moto G51","Moto G53","Moto G71"]},
+{marca:"Motorola",modelo:"Moto G23",adaptacoes:["Moto G53 5G"]},
+{marca:"Motorola",modelo:"Moto G31",adaptacoes:["Moto G41","Moto G71"]},
+{marca:"Motorola",modelo:"Moto G32",adaptacoes:["Moto G53"]},
+{marca:"Motorola",modelo:"Moto G34",adaptacoes:["Moto G13","Moto G45","Moto G73"]},
+{marca:"Motorola",modelo:"Moto G35",adaptacoes:["Poco X5","Moto G53","Moto G05","Moto G15"]},
+{marca:"Motorola",modelo:"Moto G40",adaptacoes:["Moto G40 Fusion","Redmi 10 Prime","Redmi Mi 11 Lite"]},
+{marca:"Motorola",modelo:"Moto G40 Fusion",adaptacoes:["Moto G40","Redmi 10 Prime","Redmi Mi 11 Lite"]},
+{marca:"Motorola",modelo:"Moto G42",adaptacoes:["Moto G52","Moto G71","Galaxy A53","Redmi Note 10","Galaxy A11"]},
+{marca:"Motorola",modelo:"Moto G50",adaptacoes:["Moto G8 Power Lite"]},
+{marca:"Motorola",modelo:"Moto G51",adaptacoes:["Moto G22","Galaxy A11"]},
+{marca:"Motorola",modelo:"Moto G52",adaptacoes:["Moto G82"]},
+{marca:"Motorola",modelo:"Moto G53",adaptacoes:["Moto G13","Moto G22","Moto G23","Moto G32","Moto G34","Redmi Note 10 5G"]},
+{marca:"Motorola",modelo:"Moto G54",adaptacoes:["Moto G23","Moto G13"]},
+{marca:"Motorola",modelo:"Moto G55",adaptacoes:["Sem Adaptação"]},
+{marca:"Motorola",modelo:"Moto G56",adaptacoes:["Moto G35","Moto G75","Moto G05","Moto G15"]},
+{marca:"Motorola",modelo:"Moto G60",adaptacoes:["Moto G60S","Redmi 10C","Moto G9+"]},
+{marca:"Motorola",modelo:"Moto G62",adaptacoes:["Moto G14"]},
+{marca:"Motorola",modelo:"Moto G67",adaptacoes:["iPhone 17 Pro Max"]},
+{marca:"Motorola",modelo:"Moto G71",adaptacoes:["Moto G41","Moto G31","Moto G42"]},
+{marca:"Motorola",modelo:"Moto G72",adaptacoes:["Sem Adaptação"]},
+{marca:"Motorola",modelo:"Moto G73",adaptacoes:["Moto G34"]},
+{marca:"Motorola",modelo:"Moto G75",adaptacoes:["Moto G56"]},
+{marca:"Motorola",modelo:"Moto G82",adaptacoes:["Moto G52","Moto G84 5G"]},
+{marca:"Motorola",modelo:"Moto G84",adaptacoes:["Moto G54","Moto G14"]},
+{marca:"Motorola",modelo:"Moto G86",adaptacoes:["Sem Adaptação"]},
+{marca:"Motorola",modelo:"Moto G100",adaptacoes:["Sem Adaptação"]},
+{marca:"Motorola",modelo:"Moto G200",adaptacoes:["Sem Adaptação"]},
+{marca:"Motorola",modelo:"Moto Edge 20",adaptacoes:["Moto Edge 30X","Moto Edge 30 Pro","Moto Edge 20 Lite"]},
+{marca:"Motorola",modelo:"Moto Edge 20 Pro",adaptacoes:["Sem Adaptação"]},
+{marca:"Motorola",modelo:"Moto Edge 30",adaptacoes:["Sem Adaptação"]},
+{marca:"Motorola",modelo:"Moto Edge 30 Neo",adaptacoes:["Moto Edge 50 Neo"]},
+{marca:"Motorola",modelo:"Moto Edge 50 Neo",adaptacoes:["Moto Edge 30 Neo"]},
+{marca:"Motorola",modelo:"Moto Edge 60",adaptacoes:["Sem Adaptação"]},
+{marca:"Motorola",modelo:"Moto One",adaptacoes:["Sem Adaptação"]},
+{marca:"Motorola",modelo:"Moto One Avision",adaptacoes:["Moto One Action"]},
+{marca:"Motorola",modelo:"Moto One Fusion",adaptacoes:["Moto G10","Moto G10 Power","Moto G20","Moto G30","Moto G40","Redmi 9A","Redmi 9i","Redmi 9A Sport","Galaxy A23"]},
+{marca:"Motorola",modelo:"Moto One Fusion Plus",adaptacoes:["Galaxy M52"]},
+{marca:"Motorola",modelo:"Moto One Hyper",adaptacoes:["Redmi Note 7","Moto G71","Galaxy A53","Moto G41","Moto G52","Redmi Mi 11 Lite"]},
+{marca:"Motorola",modelo:"Moto One Zoom",adaptacoes:["Galaxy A10","Moto G8+","Moto G8 Plus"]},
+{marca:"Motorola",modelo:"Moto Z2 Play",adaptacoes:["Sem Adaptação"]},
+{marca:"Motorola",modelo:"Moto Z3 Play",adaptacoes:["Sem Adaptação"]},
+
+/* ================= APPLE ================= */
+{marca:"Apple",modelo:"iPhone 5•SE 1ºG",adaptacoes:["Sem Adaptação"]},
+{marca:"Apple",modelo:"iPhone 6•6S",adaptacoes:["Sem Adaptação"]},
+{marca:"Apple",modelo:"iPhone 6 Plus",adaptacoes:["Sem Adaptação"]},
+{marca:"Apple",modelo:"iPhone 7•8",adaptacoes:["iPhone SE 2ºG"]},
+{marca:"Apple",modelo:"iPhone 7 Plus•8 Plus",adaptacoes:["Sem Adaptação"]},
+{marca:"Apple",modelo:"iPhone X",adaptacoes:["iPhone XS","iPhone 11 Pro"]},
+{marca:"Apple",modelo:"iPhone XS Max",adaptacoes:["iPhone 11 Pro Max"]},
+{marca:"Apple",modelo:"iPhone XR•11",adaptacoes:["Sem Adaptação"]},
+{marca:"Apple",modelo:"iPhone 12•12 Pro",adaptacoes:["Sem Adaptação"]},
+{marca:"Apple",modelo:"iPhone 12 Pro Max",adaptacoes:["Sem Adaptação"]},
+{marca:"Apple",modelo:"iPhone 12 Mini",adaptacoes:["Sem Adaptação"]},
+{marca:"Apple",modelo:"iPhone 13•13 Pro",adaptacoes:["iPhone 14","iPhone 16E"]},
+{marca:"Apple",modelo:"iPhone 13 Pro Max",adaptacoes:["iPhone 14 Plus"]},
+{marca:"Apple",modelo:"iPhone 13 Mini",adaptacoes:["Sem Adaptação"]},
+{marca:"Apple",modelo:"iPhone 14",adaptacoes:["iPhone 13","iPhone 16E"]},
+{marca:"Apple",modelo:"iPhone 14 Pro",adaptacoes:["iPhone 16"]},
+{marca:"Apple",modelo:"iPhone 14 Plus",adaptacoes:["iPhone 13 Pro Max","iPhone 15 Plus"]},
+{marca:"Apple",modelo:"iPhone 14 Pro Max",adaptacoes:["Sem Adaptação"]},
+{marca:"Apple",modelo:"iPhone 15",adaptacoes:["iPhone 16"]},
+{marca:"Apple",modelo:"iPhone 15 Pro",adaptacoes:["Sem Adaptação"]},
+{marca:"Apple",modelo:"iPhone 15 Plus",adaptacoes:["iPhone 14 Plus","iPhone 15 Pro Max","iPhone 16 Plus"]},
+{marca:"Apple",modelo:"iPhone 15 Pro Max",adaptacoes:["iPhone 15 Plus","iPhone 16 Plus"]},
+{marca:"Apple",modelo:"iPhone 16",adaptacoes:["iPhone 14 Pro"]},
+{marca:"Apple",modelo:"iPhone 16 Pro",adaptacoes:["iPhone 17"]},
+{marca:"Apple",modelo:"iPhone 16 Plus",adaptacoes:["iPhone 15 Plus","iPhone 15 Pro Max"]},
+{marca:"Apple",modelo:"iPhone 16 Pro Max",adaptacoes:["iPhone 17 Pro Max"]},
+{marca:"Apple",modelo:"iPhone 16E",adaptacoes:["iPhone 13","iPhone 13 Pro","iPhone 14"]},
+{marca:"Apple",modelo:"iPhone 17",adaptacoes:["iPhone 16 Pro"]},
+{marca:"Apple",modelo:"iPhone 17 Pro",adaptacoes:["Sem Adaptação"]},
+{marca:"Apple",modelo:"iPhone 17 Pro Max",adaptacoes:["iPhone 16 Pro Max","Poco X8 Pro Max"]},
+{marca:"Apple",modelo:"iPhone 17 Air",adaptacoes:["Sem Adaptação"]},
+
+/* ================= XIAOMI / REDMI / POCO ================= */
+{marca:"Xiaomi",modelo:"Redmi 6A•7A",adaptacoes:["Sem Adaptação"]},
+{marca:"Xiaomi",modelo:"Redmi A1•A2",adaptacoes:["Sem Adaptação"]},
+{marca:"Xiaomi",modelo:"Redmi A3",adaptacoes:["Redmi 10C","Redmi 12C","Poco C61"]},
+{marca:"Xiaomi",modelo:"Redmi 9",adaptacoes:["Redmi 9T"]},
+{marca:"Xiaomi",modelo:"Redmi 9A",adaptacoes:["Redmi 9C","Redmi 9i","Redmi 9A Sport","Redmi 10A","Galaxy A02","Galaxy A03","Galaxy A12","Galaxy M12","Moto E7","Moto E20","Moto G9","Poco M4"]},
+{marca:"Xiaomi",modelo:"Redmi 9C",adaptacoes:["Redmi 9A","Redmi 9i","Redmi 9A Sport","Redmi 10A","Galaxy A02","Galaxy A03","Galaxy A12","Galaxy M12","Moto E7","Moto E20","Moto G9","Poco M4"]},
+{marca:"Xiaomi",modelo:"Redmi 9i",adaptacoes:["Redmi 9A","Redmi 9C","Redmi 9A Sport","Redmi 10A","Galaxy A02","Galaxy A03","Galaxy A12","Galaxy M12","Moto E7","Moto E20","Moto G9","Poco M4"]},
+{marca:"Xiaomi",modelo:"Redmi 9A Sport",adaptacoes:["Redmi 9A","Redmi 9C","Redmi 9i","Redmi 10A","Galaxy A02","Galaxy A03","Galaxy A12","Galaxy M12","Moto E7","Moto E20","Moto G9","Poco M4"]},
+{marca:"Xiaomi",modelo:"Redmi 10A",adaptacoes:["Redmi 9A","Redmi 9C","Redmi 9i","Redmi 9A Sport","Galaxy A02","Galaxy A03","Galaxy A12","Galaxy M12","Moto E7","Moto E20","Moto G9","Poco M4"]},
+{marca:"Xiaomi",modelo:"Redmi 10 Prime",adaptacoes:["Moto G40","Moto G40 Fusion","Redmi Mi 11 Lite","Redmi 10A"]},
+{marca:"Xiaomi",modelo:"Redmi 11 Prime",adaptacoes:["Poco M4","Redmi 10A","Redmi A1","Redmi A1+"]},
+{marca:"Xiaomi",modelo:"Redmi 12",adaptacoes:["Redmi 13","Redmi Poco C65","Redmi Poco M6","Poco M6 Pro"]},
+{marca:"Xiaomi",modelo:"Redmi A1",adaptacoes:["Redmi A1+","Redmi A2","Redmi 11 Prime","Poco M4"]},
+{marca:"Xiaomi",modelo:"Redmi A1+",adaptacoes:["Redmi A1","Redmi A2","Redmi 11 Prime","Poco M4"]},
+{marca:"Xiaomi",modelo:"Redmi A2",adaptacoes:["Redmi A1","Redmi A1+","Redmi 11 Prime","Poco M4"]},
+{marca:"Xiaomi",modelo:"Redmi A5",adaptacoes:["Redmi 14C","Poco C75","Poco C71","Moto G06"]},
+{marca:"Xiaomi",modelo:"Redmi 8 Lite",adaptacoes:["Note 6 Pro","Redmi Mi 8 Lite"]},
+{marca:"Xiaomi",modelo:"Redmi Mi 11 Lite",adaptacoes:["Moto G40","Moto G40 Fusion","Redmi 10 Prime","Moto One Hyper"]},
+{marca:"Xiaomi",modelo:"Redmi Mi 11i",adaptacoes:["Poco X3","Poco X3 Pro","Poco X4","Poco X4 Pro","Poco X4 GT","Galaxy A71","Galaxy M51","Galaxy S10 Lite","Redmi Note 10 Pro","Redmi Note 11 Pro","LG K61"]},
+{marca:"Xiaomi",modelo:"Redmi Note 7",adaptacoes:["Redmi Note 8","Galaxy A10","Galaxy A20","Galaxy A30","Moto G7","Moto One Hyper"]},
+{marca:"Xiaomi",modelo:"Poco C61",adaptacoes:["Redmi A3"]},
+{marca:"Xiaomi",modelo:"Poco C65",adaptacoes:["Redmi 13C","Redmi 12","Redmi 13","Redmi Poco M6"]},
+{marca:"Xiaomi",modelo:"Poco C71",adaptacoes:["Redmi 14C","Poco C75","Redmi A5","Moto G06"]},
+{marca:"Xiaomi",modelo:"Poco C75",adaptacoes:["Redmi 14C","Poco C71","Redmi A5","Moto G06"]},
+{marca:"Xiaomi",modelo:"Poco C85",adaptacoes:["Redmi 15C"]},
+{marca:"Xiaomi",modelo:"Poco M5",adaptacoes:["Poco M4","Redmi 9A","Redmi 9i","Redmi 9C","Redmi 9A Sport","Redmi 10A","Redmi A1","Redmi A1+","Redmi A2","Redmi 11 Prime","Galaxy A02"]},
+{marca:"Xiaomi",modelo:"Poco X3 GT",adaptacoes:["Poco X3","Poco X3 Pro","Poco X4","Poco X4 Pro","Poco X4 GT","Galaxy A71","Galaxy M51","Galaxy S10 Lite","Redmi Note 10 Pro","Redmi Note 11 Pro","Redmi Mi 11i","LG K61"]},
+{marca:"Xiaomi",modelo:"Poco X4",adaptacoes:["Poco X3","Poco X3 Pro","Poco X3 GT","Poco X4 Pro","Poco X4 GT","Galaxy A71","Galaxy M51","Galaxy S10 Lite","Redmi Note 10 Pro","Redmi Note 11 Pro","Redmi Mi 11i","LG K61"]},
+{marca:"Xiaomi",modelo:"Poco X4 Pro",adaptacoes:["Poco X3","Poco X3 Pro","Poco X3 GT","Poco X4","Poco X4 GT","Galaxy A71","Galaxy M51","Galaxy S10 Lite","Redmi Note 10 Pro","Redmi Note 11 Pro","Redmi Mi 11i","LG K61"]},
+{marca:"Xiaomi",modelo:"Poco X4 GT",adaptacoes:["Poco X3","Poco X3 Pro","Poco X3 GT","Poco X4","Poco X4 Pro","Galaxy A71","Galaxy M51","Galaxy S10 Lite","Redmi Note 10 Pro","Redmi Note 11 Pro","Redmi Mi 11i","LG K61"]},
+{marca:"Xiaomi",modelo:"Poco X6 Pro",adaptacoes:["Poco X6","Poco X7 Pro","Redmi Note 10 Pro","Redmi Note 11 Pro"]},
+{marca:"Xiaomi",modelo:"Poco F4",adaptacoes:["Poco F3","Poco F5","Redmi Note 11 5G"]},
+{marca:"Xiaomi",modelo:"Poco F5",adaptacoes:["Poco F3","Poco F4","Poco F5 Pro","Redmi Note 11 5G"]},
+{marca:"Xiaomi",modelo:"Redmi Note 11 5G",adaptacoes:["Poco F3","Poco F4","Poco F5","Redmi Note 11 Pro"]},
+{marca:"Xiaomi",modelo:"Redmi Note 13 Pro",adaptacoes:["Redmi Note 13","Redmi Note 14","Redmi MI 13T","Redmi MI 13T Pro"]},
+{marca:"Xiaomi",modelo:"Redmi 13T",adaptacoes:["Redmi Note 13","Redmi Note 13 Pro","Redmi Note 14","Redmi 13T Pro","Xiaomi 14T"]},
+{marca:"Xiaomi",modelo:"Redmi 13T Pro",adaptacoes:["Redmi Note 13","Redmi Note 13 Pro","Redmi Note 14","Redmi 13T","Xiaomi 14T"]},
+{marca:"Xiaomi",modelo:"Redmi 14",adaptacoes:["Redmi Note 14","Redmi 13T","Redmi 13T Pro"]},
+{marca:"Xiaomi",modelo:"Redmi 9T",adaptacoes:["Redmi 9"]},
+{marca:"Xiaomi",modelo:"Redmi 10C",adaptacoes:["Redmi A3","Redmi 12C","Galaxy A05"]},
+{marca:"Xiaomi",modelo:"Redmi 12•13",adaptacoes:["Redmi Poco C65","Redmi Poco M6"]},
+{marca:"Xiaomi",modelo:"Redmi 12C",adaptacoes:["Redmi A3","Redmi 10C","Galaxy A05","Galaxy A15","Moto G23","Moto G34"]},
+{marca:"Xiaomi",modelo:"Redmi 13C",adaptacoes:["Poco C65","Galaxy A05","Galaxy A05S","Galaxy A06","Galaxy A07"]},
+{marca:"Xiaomi",modelo:"Redmi 14C",adaptacoes:["Poco C75","Poco C71","Redmi A5","Moto G06"]},
+{marca:"Xiaomi",modelo:"Redmi 15",adaptacoes:["Sem Adaptação"]},
+{marca:"Xiaomi",modelo:"Redmi 15C",adaptacoes:["Poco C85"]},
+{marca:"Xiaomi",modelo:"Note 6 Pro",adaptacoes:["Redmi Mi 8 Lite"]},
+{marca:"Xiaomi",modelo:"Redmi Note 7•8",adaptacoes:["Galaxy A10","Galaxy A20","Galaxy A30","Moto G7"]},
+{marca:"Xiaomi",modelo:"Redmi Note 8T",adaptacoes:["Sem Adaptação"]},
+{marca:"Xiaomi",modelo:"Redmi Note 8 Pro",adaptacoes:["Galaxy A30","Galaxy A50","Moto G8 Power"]},
+{marca:"Xiaomi",modelo:"Redmi Note 9",adaptacoes:["Galaxy A11","Galaxy A21","Moto G22","Moto G31"]},
+{marca:"Xiaomi",modelo:"Redmi Note 9S",adaptacoes:["Galaxy A31","Galaxy A32","Moto G40","Moto G41"]},
+{marca:"Xiaomi",modelo:"Redmi Note 9 Pro",adaptacoes:["Galaxy A31","Galaxy A32","Moto G40","Moto G41"]},
+{marca:"Xiaomi",modelo:"Redmi Note 10",adaptacoes:["Redmi Note 11","Redmi Note 11S","Redmi Note 12","Galaxy A11","Galaxy A21","Moto G22"]},
+{marca:"Xiaomi",modelo:"Redmi Note 10 5G",adaptacoes:["Moto G13","Moto G53"]},
+{marca:"Xiaomi",modelo:"Redmi Note 10S",adaptacoes:["Galaxy A32","Galaxy A33","Moto G52"]},
+{marca:"Xiaomi",modelo:"Redmi Note 10 Pro",adaptacoes:["Redmi Note 11 Pro","Galaxy A52","Galaxy A52S","Galaxy S20 FE","Moto G82"]},
+{marca:"Xiaomi",modelo:"Redmi Note 11",adaptacoes:["Redmi Note 10","Redmi Note 11S","Redmi Note 12","Galaxy A21","Galaxy A71","Moto G22"]},
+{marca:"Xiaomi",modelo:"Redmi Note 11S",adaptacoes:["Redmi Note 10","Redmi Note 11","Redmi Note 12","Galaxy A32","Galaxy A33","Moto G52"]},
+{marca:"Xiaomi",modelo:"Redmi Note 11 Pro",adaptacoes:["Redmi Note 10 Pro","Galaxy A52","Galaxy A53","Moto G82"]},
+{marca:"Xiaomi",modelo:"Redmi Note 11 Pro 5G",adaptacoes:["Galaxy A53","Galaxy A54","Moto G82"]},
+{marca:"Xiaomi",modelo:"Redmi Note 12",adaptacoes:["Galaxy A23","Galaxy A33","Moto G32"]},
+{marca:"Xiaomi",modelo:"Redmi Note 12S",adaptacoes:["Redmi Note 10","Redmi Note 11","Redmi Note 11S","Galaxy A33","Galaxy A34","Moto G52"]},
+{marca:"Xiaomi",modelo:"Redmi Note 12 Pro",adaptacoes:["Galaxy A53","Galaxy A54","Moto G82"]},
+{marca:"Xiaomi",modelo:"Redmi Note 12 Pro 5G",adaptacoes:["Galaxy A54","Galaxy A55","Moto G84"]},
+{marca:"Xiaomi",modelo:"Redmi Note 13•13 Pro",adaptacoes:["Redmi MI 13T","Redmi MI 13T Pro","Redmi Note 14"]},
+{marca:"Xiaomi",modelo:"Redmi Note 13 Pro Plus",adaptacoes:["Sem Adaptação"]},
+{marca:"Xiaomi",modelo:"Redmi Note 14",adaptacoes:["Sem Adaptação"]},
+{marca:"Xiaomi",modelo:"Redmi Note 14 Pro•14 Pro Plus",adaptacoes:["Sem Adaptação"]},
+{marca:"Xiaomi",modelo:"Poco X3•X3 Pro",adaptacoes:["Poco X3 GT","Poco X4","Poco X4 Pro","Poco X4 GT","Galaxy A71","Galaxy M51","Galaxy S10 Lite","Redmi Note 10 Pro","Redmi Note 11 Pro","Redmi Mi 11i","LG K61"]},
+{marca:"Xiaomi",modelo:"Poco X4•X4 Pro",adaptacoes:["Poco X4 GT"]},
+{marca:"Xiaomi",modelo:"Poco X5",adaptacoes:["Redmi Note 12"]},
+{marca:"Xiaomi",modelo:"Poco X5 Pro",adaptacoes:["Redmi Note 12 Pro","Poco F5 Pro"]},
+{marca:"Xiaomi",modelo:"Poco X6•X6 Pro",adaptacoes:["Redmi Note 10 Pro","Redmi Note 11 Pro","Poco X7 Pro"]},
+{marca:"Xiaomi",modelo:"Poco X7 Pro",adaptacoes:["Poco X6 Pro","Redmi Note 10 Pro","Redmi Note 11 Pro"]},
+{marca:"Xiaomi",modelo:"Poco X8",adaptacoes:["Sem Adaptação"]},
+{marca:"Xiaomi",modelo:"Poco X8 Pro",adaptacoes:["Sem Adaptação"]},
+{marca:"Xiaomi",modelo:"Poco X8 Pro Max",adaptacoes:["iPhone 17 Pro Max"]},
+{marca:"Xiaomi",modelo:"Poco F1",adaptacoes:["Sem Adaptação"]},
+{marca:"Xiaomi",modelo:"Poco F3",adaptacoes:["Poco F4","Poco F5","Redmi Note 11 5G"]},
+{marca:"Xiaomi",modelo:"Poco F5 Pro",adaptacoes:["Poco X5 Pro","Redmi Note 12 Pro"]},
+{marca:"Xiaomi",modelo:"Poco F6•F6 Pro",adaptacoes:["Poco X6","Poco X6 Pro"]},
+{marca:"Xiaomi",modelo:"Poco F7",adaptacoes:["iPhone 16 Pro Max"]},
+{marca:"Xiaomi",modelo:"Poco C3",adaptacoes:["Realme C33"]},
+{marca:"Xiaomi",modelo:"Poco M2",adaptacoes:["Galaxy A22 4G","Galaxy A33","Galaxy A32 4G"]},
+{marca:"Xiaomi",modelo:"Poco M3",adaptacoes:["Galaxy A32 5G","Redmi 9T"]},
+{marca:"Xiaomi",modelo:"Poco M3 Pro",adaptacoes:["Redmi 10","Redmi 10 Prime","Moto G14","Moto G54","Moto G34","Moto G42"]},
+{marca:"Xiaomi",modelo:"Poco M4",adaptacoes:["Moto E13","Poco M5","Redmi 9A","Redmi 9i","Redmi 9C","Redmi 9A Sport","Redmi 10A","Redmi A1","Redmi A1+","Redmi A2","Redmi 11 Prime","Galaxy A02"]},
+{marca:"Xiaomi",modelo:"Poco M6 5G",adaptacoes:["Redmi 13C"]},
+{marca:"Xiaomi",modelo:"Poco M6 Pro",adaptacoes:["Redmi 12"]},
+{marca:"Xiaomi",modelo:"14T",adaptacoes:["Xiaomi 12T"]},
+{marca:"Xiaomi",modelo:"Mi Play",adaptacoes:["Galaxy A01"]},
+
+/* ================= INFINIX ================= */
+{marca:"Infinix",modelo:"Smart 7",adaptacoes:["Galaxy A03","Galaxy A04","Moto E7","Moto G9"]},
+{marca:"Infinix",modelo:"Smart 8",adaptacoes:["Moto G04","Moto G24","Redmi Note 13 Pro"]},
+{marca:"Infinix",modelo:"Smart 8 Pro",adaptacoes:["Moto G04","Moto G24","Redmi Note 13 Pro"]},
+{marca:"Infinix",modelo:"Hot 11",adaptacoes:["Galaxy A13","Moto G9 Power","Moto G200"]},
+{marca:"Infinix",modelo:"Hot 11S",adaptacoes:["Moto G200"]},
+{marca:"Infinix",modelo:"Hot 20 5G",adaptacoes:["Moto G9","Moto G8 Power Lite"]},
+{marca:"Infinix",modelo:"Hot 20i",adaptacoes:["Moto G8 Power Lite","Galaxy A20S"]},
+{marca:"Infinix",modelo:"Hot 30",adaptacoes:["Moto G200"]},
+{marca:"Infinix",modelo:"Hot 30i",adaptacoes:["Moto G200"]},
+{marca:"Infinix",modelo:"Hot 40",adaptacoes:["Moto G13","Moto G24"]},
+{marca:"Infinix",modelo:"Hot 40i",adaptacoes:["Galaxy A73","Moto G04","Moto G24"]},
+{marca:"Infinix",modelo:"Note 12 Pro 5G",adaptacoes:["Galaxy A80"]},
+{marca:"Infinix",modelo:"Note 30 5G",adaptacoes:["Moto G200"]},
+{marca:"Infinix",modelo:"Note 50",adaptacoes:["Moto G9+"]},
+{marca:"Infinix",modelo:"Note 60i",adaptacoes:["Moto G15"]},
+
+/* ================= Realme ================= */
+{marca:"Realme",modelo:"7",adaptacoes:["Sem Adaptação"]},
+{marca:"Realme",modelo:"8",adaptacoes:["Sem Adaptação"]},
+{marca:"Realme",modelo:"C2",adaptacoes:["Galaxy A23","Galaxy A22","Galaxy A02"]},
+{marca:"Realme",modelo:"C11",adaptacoes:["Moto E13","Moto E30","Moto G9 Play","Galaxy A02S","Moto G30","Moto E7 Power","Moto One Fusion","Galaxy A12","Galaxy A70"]},
+{marca:"Realme",modelo:"C33",adaptacoes:["Moto G8 Power Lite","Galaxy A12","Poco C3","Galaxy A05","Redmi 13C","Realme Note 50","Realme Note 60"]},
+{marca:"Realme",modelo:"C75",adaptacoes:["Moto G05","Moto G15"]},
+{marca:"Realme",modelo:"Note 50",adaptacoes:["Galaxy A05","Redmi 13C","Realme C33","Realme Note 60"]},
+{marca:"Realme",modelo:"Note 60",adaptacoes:["Galaxy A05","Redmi 13C","Realme C33","Realme Note 50"]},
+
+/* ================= Asus ================= */
+{marca:"Asus",modelo:"Zenfone Max Shot",adaptacoes:["Sem Adaptação"]},
+{marca:"Asus",modelo:"Zenfone 6",adaptacoes:["Galaxy A51","Galaxy S21 FE"]},
+
+/* ================= Nokia ================= */
+{marca:"Nokia",modelo:"TA-1263",adaptacoes:["Moto Z3 Play"]},
+{marca:"Nokia",modelo:"2.4",adaptacoes:["Moto G9","Moto G9 Play"]},
+
+/* ================= Itel ================= */
+{marca:"Itel",modelo:"A50",adaptacoes:["Galaxy A13","Moto G9","Moto G9 Play"]},
+{marca:"Itel",modelo:"A70",adaptacoes:["Galaxy A22 5G","Galaxy A12","Galaxy A70"]},
+
+/* ================= Tecno ================= */
+{marca:"Tecno",modelo:"KG5J",adaptacoes:["Moto G9 Play"]},
+{marca:"Tecno",modelo:"Pop 7",adaptacoes:["Moto G8 Power Lite"]},
+
+/* ================= Oscal ================= */
+{marca:"Oscal",modelo:"C80",adaptacoes:["Moto G8 Power Lite"]},
+
+/* ================= Lg ================= */
+{marca:"Lg",modelo:"K11",adaptacoes:["Sem Adaptação"]},
+{marca:"Lg",modelo:"K40S",adaptacoes:["Galaxy A10","Galaxy A10S","Galaxy M10","Moto G8 Play","Moto G8 Plus","Moto G7","Redmi 8","Redmi 8A"]},
+{marca:"Lg",modelo:"K61",adaptacoes:["Poco X3","Poco X3 Pro","Poco X4","Poco X4 Pro","Poco X4 GT","Galaxy A71","Galaxy M51","Galaxy S10 Lite","Redmi Note 10 Pro","Redmi Note 11 Pro","Redmi Mi 11i"]},
+
+/* ================= Oppo ================= */
+{marca:"Oppo",modelo:"A40",adaptacoes:["Moto G05•G15"]},
+
+/* ================= Jovi ================= */
+{marca:"Jovi",modelo:"V2445",adaptacoes:["Moto G05•G15"]},
+{marca:"Jovi",modelo:"Y29",adaptacoes:["Moto G56"]},
+
+/* ================= TCL ================= */
+{marca:"TCL",modelo:"40",adaptacoes:["Galaxy A05","Galaxy A05S","Redmi 13C","Redmi C65","Realme C33","Realme Note 50","Realme Note 60"]},
+
+];
+
+const themeToggle = document.getElementById('themeToggle');
+const savedTheme = localStorage.getItem('theme') || 'light';
+document.body.setAttribute('data-theme', savedTheme);
+
+themeToggle.addEventListener('click', () => {
+  const current = document.body.getAttribute('data-theme');
+  const newTheme = current === 'light' ? 'dark' : 'light';
+  document.body.setAttribute('data-theme', newTheme);
+  localStorage.setItem('theme', newTheme);
+});
+
+function switchTab(tabName, btn) {
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
+  
+  document.getElementById(tabName).classList.add('active');
+  if (btn) {
+    btn.classList.add('active');
+  } else {
+    event.currentTarget.classList.add('active');
+  }
+}
+
+const normalizar = (txt) => txt.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+
+// Pré-computa os campos normalizados de cada item UMA vez ao carregar a página,
+// em vez de normalizar o array inteiro (marca + modelo + todas as adaptações)
+// a cada tecla digitada. Isso é o que mais pesava na busca com muitos resultados.
+// Virou uma função (em vez de rodar direto) porque agora ela também precisa
+// ser chamada de novo sempre que um modelo é adicionado pelo painel de admin.
+function indexarDados() {
+  dados.forEach(d => {
+    d._marcaNorm = normalizar(d.marca);
+    d._modeloNorm = normalizar(d.modelo);
+    d._adaptNorm = d.adaptacoes ? d.adaptacoes.map(normalizar) : [];
+  });
+}
+indexarDados();
+
+const resultadoEl = document.getElementById('resultado');
+const buscaInput = document.getElementById('busca');
+let debounceTimer = null;
+
+/* ============================================================
+   SISTEMA DE AVALIAÇÃO DAS ADAPTAÇÕES (like / deslike)
+   ============================================================
+   Cada loja pode avaliar se uma adaptação "dá certo" (👍) ou
+   "dá errado" (👎). Os votos ficam salvos no Firebase (Firestore),
+   compartilhados entre todas as lojas que acessarem o site.
+
+   Regras de negócio (ajuste as constantes abaixo se quiser):
+   - MIN_VOTOS_REMOCAO: quantos votos uma adaptação precisa
+     acumular antes de poder ser escondida automaticamente.
+   - LIMITE_REPROVACAO: % de deslike a partir do qual, já tendo
+     o mínimo de votos, a adaptação some da lista (mas o
+     histórico de votos continua salvo no banco).
+   ============================================================ */
+const MIN_VOTOS_REMOCAO = 3;
+const LIMITE_REPROVACAO = 50; // em %
+
+let avaliacoesCache = {}; // slug -> {likes, dislikes}
+let avaliacoesCarregadas = false;
+
+function slugAvaliacao(marca, modelo, adaptacao) {
+  return normalizar(marca + modelo) + '__' + normalizar(adaptacao);
+}
+
+function votosDoSlug(slug) {
+  return avaliacoesCache[slug] || { likes: 0, dislikes: 0 };
+}
+
+function statusAdaptacao(slug) {
+  const { likes, dislikes } = votosDoSlug(slug);
+  const total = likes + dislikes;
+  if (total === 0) return { total: 0, pctAprovacao: null, reprovada: false };
+  const pctAprovacao = Math.round((likes / total) * 100);
+  const pctReprovacao = 100 - pctAprovacao;
+  const reprovada = total >= MIN_VOTOS_REMOCAO && pctReprovacao >= LIMITE_REPROVACAO;
+  return { total, pctAprovacao, reprovada };
+}
+
+async function carregarAvaliacoes() {
+  if (typeof db === 'undefined') return; // Firebase não configurado ainda
+  try {
+    const snap = await db.collection('avaliacoes').get();
+    const novoCache = {};
+    snap.forEach(doc => { novoCache[doc.id] = doc.data(); });
+    avaliacoesCache = novoCache;
+  } catch (e) {
+    console.warn('Não foi possível carregar as avaliações do Firebase:', e);
+  } finally {
+    avaliacoesCarregadas = true;
+    renderResultados(buscaInput.value);
+    if (typeof atualizarPainelSeAberto === 'function') atualizarPainelSeAberto();
+  }
+}
+
+// Mapa slug -> texto legível (marca/modelo de origem + nome da adaptação),
+// usado no painel de ranking. É recalculado a partir de "dados", já que o
+// Firestore só guarda os números (likes/dislikes), não o texto. Também virou
+// função pra poder ser refeito quando o painel de admin adiciona um modelo.
+let slugParaTexto = {};
+function construirSlugParaTexto() {
+  slugParaTexto = {};
+  dados.forEach(d => {
+    if (!d.adaptacoes) return;
+    d.adaptacoes.forEach(a => {
+      if (a === 'Sem Adaptação') return;
+      const slug = slugAvaliacao(d.marca, d.modelo, a);
+      slugParaTexto[slug] = { origem: `${d.marca} ${d.modelo}`, adaptacao: a };
+    });
+  });
+}
+construirSlugParaTexto();
+
+async function votar(slug, tipo, event) {
+  if (event) event.stopPropagation();
+  if (typeof db === 'undefined') {
+    alert('O banco de dados ainda não foi configurado neste site (veja as instruções no início do script.js).');
+    return;
+  }
+  const chaveLocal = 'voto_' + slug;
+  const votoAtual = localStorage.getItem(chaveLocal); // 'like' | 'dislike' | null
+  const ref = db.collection('avaliacoes').doc(slug);
+  try {
+    await db.runTransaction(async (t) => {
+      const doc = await t.get(ref);
+      const atual = doc.exists ? doc.data() : { likes: 0, dislikes: 0 };
+      let likes = atual.likes || 0;
+      let dislikes = atual.dislikes || 0;
+
+      if (!votoAtual) {
+        // Primeiro voto desta loja nesta adaptação.
+        if (tipo === 'like') likes += 1; else dislikes += 1;
+      } else if (votoAtual === tipo) {
+        // Clicou de novo no mesmo botão -> reverte (remove) o voto.
+        if (tipo === 'like') likes = Math.max(0, likes - 1);
+        else dislikes = Math.max(0, dislikes - 1);
+      } else {
+        // Clicou no botão oposto -> troca o voto de um lado pro outro.
+        if (tipo === 'like') { likes += 1; dislikes = Math.max(0, dislikes - 1); }
+        else { dislikes += 1; likes = Math.max(0, likes - 1); }
+      }
+      t.set(ref, { likes, dislikes }, { merge: true });
+    });
+
+    if (!votoAtual || votoAtual !== tipo) {
+      localStorage.setItem(chaveLocal, tipo);
+    } else {
+      localStorage.removeItem(chaveLocal); // voto revertido
+    }
+
+    const doc = await ref.get();
+    avaliacoesCache[slug] = doc.data();
+    renderResultados(buscaInput.value);
+    if (typeof atualizarPainelSeAberto === 'function') atualizarPainelSeAberto();
+  } catch (e) {
+    console.error(e);
+    alert('Não foi possível registrar o voto agora. Verifique a conexão com a internet.');
+  }
+}
+window.votar = votar;
+
+function renderTagsAdaptacoes(marca, modelo, adaptacoes) {
+  if (!adaptacoes || adaptacoes[0] === "Sem Adaptação") {
+    return '<span class="no-adapt">Sem adaptações compatíveis</span>';
+  }
+
+  const visiveis = adaptacoes.filter(a => {
+    if (!avaliacoesCarregadas) return true; // antes de carregar, mostra tudo
+    return !statusAdaptacao(slugAvaliacao(marca, modelo, a)).reprovada;
+  });
+
+  if (!visiveis.length) {
+    return '<span class="no-adapt">As adaptações cadastradas foram reprovadas pelas lojas.</span>';
+  }
+
+  return visiveis.map(a => {
+    const slug = slugAvaliacao(marca, modelo, a);
+    const st = statusAdaptacao(slug);
+    const votoAtual = localStorage.getItem('voto_' + slug);
+    return `
+      <span class="tag">
+        <span class="tag-texto">${a}</span>
+        ${st.total > 0 ? `<span class="tag-pct" title="${st.total} avaliação(ões) de lojas">${st.pctAprovacao}% 👍</span>` : ''}
+        <span class="tag-votos">
+          <button type="button" class="voto-btn voto-like${votoAtual === 'like' ? ' votado' : ''}"
+                  onclick="votar('${slug}','like',event)" title="Clique para avaliar / clique de novo para desfazer">👍</button>
+          <button type="button" class="voto-btn voto-dislike${votoAtual === 'dislike' ? ' votado' : ''}"
+                  onclick="votar('${slug}','dislike',event)" title="Clique para avaliar / clique de novo para desfazer">👎</button>
+        </span>
+      </span>`;
+  }).join('');
+}
+
+function renderVazio(mensagemHtml) {
+  resultadoEl.innerHTML = `<div class="vazio">${mensagemHtml}</div>`;
+}
+
+function renderResultados(busca) {
+  if (!busca) {
+    renderVazio(`<i class="fas fa-mobile-alt"></i><p>Digite o modelo ou fabricante para buscar compatibilidade de películas.</p>`);
+    return;
+  }
+
+  const f = normalizar(busca);
+
+  // Uma única varredura no array em vez de até 3 (marca, depois modelo, depois
+  // adaptações), classificando por relevância para manter marca/modelo primeiro.
+  let porMarca = [], porModelo = [], porAdaptacao = [];
+  for (const d of dados) {
+    if (d._marcaNorm.includes(f)) { porMarca.push(d); continue; }
+    if (d._modeloNorm.includes(f)) { porModelo.push(d); continue; }
+    if (d._adaptNorm.some(a => a.includes(f))) { porAdaptacao.push(d); }
+  }
+  let resultados = porMarca.length ? porMarca : (porModelo.length ? porModelo : porAdaptacao);
+
+  if (!resultados.length) {
+    renderVazio(`<i class="fas fa-search"></i><p>Nenhuma compatibilidade encontrada para "<strong>${busca}</strong>".</p>`);
+    return;
+  }
+
+  const frag = document.createDocumentFragment();
+  const wrapper = document.createElement('div');
+  wrapper.innerHTML = resultados.map((d, i) => `
+    <div class="card" style="animation-delay:${Math.min(i, 12) * 0.04}s">
+      <div class="card-header">
+        <img class="brand-logo" loading="lazy" src="logos/${d.marca.toLowerCase()}.png" alt="${d.marca}"
+             onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2280%22>📱</text></svg>'">
+        <div class="card-info">
+          <div class="modelo">${d.modelo}</div>
+          <div class="marca">${d.marca}</div>
+        </div>
+      </div>
+      <div class="adaptacoes">
+        <div class="adaptacoes-title">
+          <i class="fas fa-exchange-alt"></i>
+          Adaptação compatível
+        </div>
+        <div class="adaptacoes-list">
+          ${renderTagsAdaptacoes(d.marca, d.modelo, d.adaptacoes)}
+        </div>
+      </div>
+    </div>
+  `).join('');
+  frag.appendChild(wrapper);
+  resultadoEl.replaceChildren(...wrapper.childNodes);
+}
+
+buscaInput.addEventListener('input', (e) => {
+  const valor = e.target.value;
+  clearTimeout(debounceTimer);
+  // Pequeno atraso: evita refazer a busca e re-renderizar os cards a cada
+  // tecla enquanto a pessoa ainda está digitando (isso é o que mais trava
+  // a digitação quando há muitos resultados na tela).
+  debounceTimer = setTimeout(() => renderResultados(valor), 150);
+});
+
+/* ============================================================
+   PAINEL DE RANKING (mais like / mais deslike)
+   ============================================================
+   Lista todas as adaptações já avaliadas por alguma loja,
+   ordenadas para destacar as mais reprovadas — pra você decidir
+   quais tirar do catálogo manualmente (além das que já somem
+   sozinhas ao passar do limite configurado em MIN_VOTOS_REMOCAO
+   e LIMITE_REPROVACAO, lá em cima).
+   ============================================================ */
+const painelOverlay = document.getElementById('painelOverlay');
+const painelBtn = document.getElementById('painelToggle');
+const painelFechar = document.getElementById('painelFechar');
+const painelCorpo = document.getElementById('painelCorpo');
+let ordemPainelAtual = 'deslikes'; // 'deslikes' | 'likes'
+
+function construirListaPainel() {
+  const linhas = [];
+  for (const slug in avaliacoesCache) {
+    const info = slugParaTexto[slug];
+    if (!info) continue; // slug de uma adaptação que não existe mais em "dados"
+    const { likes, dislikes } = avaliacoesCache[slug];
+    const total = (likes || 0) + (dislikes || 0);
+    if (total === 0) continue;
+    const st = statusAdaptacao(slug);
+    linhas.push({
+      origem: info.origem,
+      adaptacao: info.adaptacao,
+      likes: likes || 0,
+      dislikes: dislikes || 0,
+      total,
+      pctAprovacao: st.pctAprovacao,
+      reprovada: st.reprovada
+    });
+  }
+  linhas.sort((a, b) => {
+    if (ordemPainelAtual === 'deslikes') return b.dislikes - a.dislikes || b.total - a.total;
+    return b.likes - a.likes || b.total - a.total;
+  });
+  return linhas;
+}
+
+function renderPainel() {
+  if (!avaliacoesCarregadas) {
+    painelCorpo.innerHTML = `<div class="vazio"><i class="fas fa-spinner fa-spin"></i><p>Carregando avaliações...</p></div>`;
+    return;
+  }
+  const linhas = construirListaPainel();
+  if (!linhas.length) {
+    painelCorpo.innerHTML = `<div class="vazio"><i class="fas fa-chart-simple"></i><p>Nenhuma loja avaliou uma adaptação ainda.</p></div>`;
+    return;
+  }
+  painelCorpo.innerHTML = `
+    <table class="painel-tabela">
+      <thead>
+        <tr>
+          <th>Modelo (origem)</th>
+          <th>Adaptação avaliada</th>
+          <th>👍</th>
+          <th>👎</th>
+          <th>% aprovação</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${linhas.map(l => `
+          <tr class="${l.reprovada ? 'linha-reprovada' : ''}">
+            <td>${l.origem}</td>
+            <td>${l.adaptacao}</td>
+            <td class="col-num">${l.likes}</td>
+            <td class="col-num">${l.dislikes}</td>
+            <td class="col-num">${l.pctAprovacao}%</td>
+            <td>${l.reprovada
+              ? '<span class="selo selo-removida">Removida do site</span>'
+              : '<span class="selo selo-ativa">Ativa</span>'}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+function atualizarPainelSeAberto() {
+  if (painelOverlay && painelOverlay.classList.contains('aberto')) renderPainel();
+}
+
+function abrirPainel() {
+  painelOverlay.classList.add('aberto');
+  renderPainel();
+  if (!avaliacoesCarregadas) carregarAvaliacoes();
+}
+
+function fecharPainel() {
+  painelOverlay.classList.remove('aberto');
+}
+
+if (painelBtn) painelBtn.addEventListener('click', abrirPainel);
+if (painelFechar) painelFechar.addEventListener('click', fecharPainel);
+if (painelOverlay) {
+  painelOverlay.addEventListener('click', (e) => {
+    if (e.target === painelOverlay) fecharPainel(); // clicou fora do card
+  });
+}
+document.querySelectorAll('.painel-ordenar button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    ordemPainelAtual = btn.dataset.ordem;
+    document.querySelectorAll('.painel-ordenar button').forEach(b => b.classList.toggle('ativo', b === btn));
+    renderPainel();
+  });
+});
+
+carregarAvaliacoes();
+
+/* ============================================================
+   ADMIN: adicionar / editar modelos e adaptações pelo site
+   ============================================================
+   Objetivo: acabar com a edição manual deste arquivo. Agora dá
+   pra cadastrar um modelo novo (ou completar um que já existe)
+   direto pelo painel de ranking, com usuário e senha. Os dados
+   ficam salvos no Firestore, na coleção "modelos_extra", e são
+   somados aos modelos que já vêm prontos no topo deste arquivo
+   toda vez que o site carrega — ninguém precisa mais editar o
+   script.js na mão.
+
+   LIGAÇÃO AUTOMÁTICA (bidirecional): ao salvar um modelo novo
+   com uma adaptação que já existe no sistema (ex: cadastrar o
+   "iPhone 16e" com adaptação "iPhone 13"), o sistema também
+   adiciona o "iPhone 16e" como adaptação do "iPhone 13"
+   automaticamente. Assim as duas fichas ficam sincronizadas sem
+   precisar cadastrar dos dois lados.
+
+   SOBRE A SENHA (leia com atenção): como o site não tem um
+   servidor próprio nem login de verdade (Firebase Authentication),
+   essa senha serve só pra evitar que alguém mexa por engano — ela
+   fica visível pra quem abrir o código do site (F12), então não é
+   uma proteção contra alguém mal-intencionado. As regras do
+   Firestore (REGRAS_FIRESTORE.txt) só validam o FORMATO dos dados
+   enviados, não quem está enviando. Se um dia isso virar um
+   problema (edições indevidas), o certo é migrar pra um login de
+   verdade — posso implementar depois se precisar.
+   ============================================================ */
+const ADMIN_USUARIO = "pinheirinho";
+const ADMIN_SENHA = "pelicula2026"; // troque aqui pela senha que quiser usar
+
+function normalizarSlugModelo(marca, modelo) {
+  return normalizar(marca + modelo);
+}
+
+// Soma (sem duplicar) um {marca, modelo, adaptacoes} vindo do Firestore (ou
+// recém salvo pelo formulário) dentro do array "dados" já usado pela busca.
+function mesclarModeloNoSistema(info) {
+  if (!info || !info.marca || !info.modelo) return;
+  const slug = normalizarSlugModelo(info.marca, info.modelo);
+  const existente = dados.find(d => normalizarSlugModelo(d.marca, d.modelo) === slug);
+  const novasAdapt = Array.isArray(info.adaptacoes) ? info.adaptacoes : [];
+
+  if (existente) {
+    if (!existente.adaptacoes || existente.adaptacoes[0] === "Sem Adaptação") existente.adaptacoes = [];
+    novasAdapt.forEach(a => {
+      const jaTem = existente.adaptacoes.some(x => normalizar(x) === normalizar(a));
+      if (!jaTem) existente.adaptacoes.push(a);
+    });
+  } else {
+    dados.push({ marca: info.marca, modelo: info.modelo, adaptacoes: [...novasAdapt] });
+  }
+}
+
+async function carregarModelosExtras() {
+  if (typeof db === 'undefined') return; // Firebase não configurado ainda
+  try {
+    const snap = await db.collection('modelos_extra').get();
+    snap.forEach(doc => mesclarModeloNoSistema(doc.data()));
+  } catch (e) {
+    console.warn('Não foi possível carregar os modelos cadastrados pelo painel de admin:', e);
+  } finally {
+    indexarDados();
+    construirSlugParaTexto();
+    popularFabricantes();
+    renderResultados(buscaInput.value);
+    atualizarPainelSeAberto();
+  }
+}
+
+/* ---------- Login (usuário e senha) ---------- */
+const loginOverlay = document.getElementById('loginOverlay');
+const loginUsuarioInput = document.getElementById('loginUsuario');
+const loginSenhaInput = document.getElementById('loginSenha');
+const loginErro = document.getElementById('loginErro');
+const painelAdminBtn = document.getElementById('painelAdminBtn');
+
+function abrirLogin() {
+  loginErro.style.display = 'none';
+  loginUsuarioInput.value = '';
+  loginSenhaInput.value = '';
+  loginOverlay.classList.add('aberto');
+  setTimeout(() => loginUsuarioInput.focus(), 50);
+}
+function fecharLogin() {
+  loginOverlay.classList.remove('aberto');
+}
+
+if (painelAdminBtn) painelAdminBtn.addEventListener('click', abrirLogin);
+document.getElementById('loginFechar').addEventListener('click', fecharLogin);
+document.getElementById('loginCancelar').addEventListener('click', fecharLogin);
+loginOverlay.addEventListener('click', (e) => { if (e.target === loginOverlay) fecharLogin(); });
+
+function tentarLogin() {
+  if (loginUsuarioInput.value.trim() === ADMIN_USUARIO && loginSenhaInput.value === ADMIN_SENHA) {
+    fecharLogin();
+    abrirAdmin();
+  } else {
+    loginErro.style.display = 'block';
+  }
+}
+document.getElementById('loginEntrar').addEventListener('click', tentarLogin);
+[loginUsuarioInput, loginSenhaInput].forEach(inp => {
+  inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') tentarLogin(); });
+});
+
+/* ---------- Formulário de modelo / adaptação ---------- */
+const adminOverlay = document.getElementById('adminOverlay');
+const adminModeloInput = document.getElementById('adminModelo');
+const adminModeloSugestoes = document.getElementById('adminModeloSugestoes');
+const adminMarcaSelect = document.getElementById('adminMarca');
+const adminNovaMarcaInput = document.getElementById('adminNovaMarca');
+const adminAdaptInput = document.getElementById('adminAdaptacao');
+const adminAdaptSugestoes = document.getElementById('adminAdaptSugestoes');
+const adminChipsLista = document.getElementById('adminChipsLista');
+const adminErro = document.getElementById('adminErro');
+const adminSucesso = document.getElementById('adminSucesso');
+const adminSalvarBtn = document.getElementById('adminSalvar');
+
+let adminChips = [];                  // [{marca, modelo}] — adaptações selecionadas no formulário
+let adminModeloSelecionadoExistente = null; // referência ao item de "dados", se for edição de um modelo já cadastrado
+
+function popularSelectMarcaAdmin() {
+  adminMarcaSelect.innerHTML = '<option value="">Selecione a marca</option>';
+  [...new Set(dados.map(d => d.marca))].sort().forEach(m => {
+    const opt = document.createElement('option');
+    opt.value = m;
+    opt.textContent = m;
+    adminMarcaSelect.appendChild(opt);
+  });
+  const optNova = document.createElement('option');
+  optNova.value = '__nova__';
+  optNova.textContent = '+ Nova marca';
+  adminMarcaSelect.appendChild(optNova);
+}
+
+function renderChipsAdmin() {
+  if (!adminChips.length) {
+    adminChipsLista.innerHTML = '<span class="admin-chip-vazio">Nenhuma adaptação adicionada ainda.</span>';
+    return;
+  }
+  adminChipsLista.innerHTML = adminChips.map((c, i) => `
+    <span class="admin-chip">
+      ${c.marca ? `${c.marca} • ${c.modelo}` : c.modelo}
+      <button type="button" data-i="${i}" class="admin-chip-remover" title="Remover">&times;</button>
+    </span>
+  `).join('');
+  adminChipsLista.querySelectorAll('.admin-chip-remover').forEach(btn => {
+    btn.addEventListener('click', () => {
+      adminChips.splice(Number(btn.dataset.i), 1);
+      renderChipsAdmin();
+    });
+  });
+}
+
+function abrirAdmin() {
+  adminModeloInput.value = '';
+  adminNovaMarcaInput.value = '';
+  adminNovaMarcaInput.style.display = 'none';
+  adminAdaptInput.value = '';
+  adminAdaptSugestoes.innerHTML = '';
+  adminModeloSugestoes.innerHTML = '';
+  adminChips = [];
+  adminModeloSelecionadoExistente = null;
+  adminErro.style.display = 'none';
+  adminSucesso.style.display = 'none';
+  renderChipsAdmin();
+  popularSelectMarcaAdmin();
+  adminMarcaSelect.value = '';
+  adminOverlay.classList.add('aberto');
+  setTimeout(() => adminModeloInput.focus(), 50);
+}
+function fecharAdmin() {
+  adminOverlay.classList.remove('aberto');
+}
+
+document.getElementById('adminFechar').addEventListener('click', fecharAdmin);
+document.getElementById('adminCancelar').addEventListener('click', fecharAdmin);
+adminOverlay.addEventListener('click', (e) => { if (e.target === adminOverlay) fecharAdmin(); });
+
+adminMarcaSelect.addEventListener('change', () => {
+  adminNovaMarcaInput.style.display = adminMarcaSelect.value === '__nova__' ? 'block' : 'none';
+});
+
+// Busca modelos já cadastrados (marca ou modelo) pra usar tanto na busca do
+// "qual modelo estou cadastrando" quanto na busca de "quais adaptações ligar".
+function buscarModelosSistema(termo, excluirSlug) {
+  const f = normalizar(termo);
+  if (!f) return [];
+  return dados
+    .filter(d => normalizarSlugModelo(d.marca, d.modelo) !== excluirSlug)
+    .filter(d => (d._modeloNorm || normalizar(d.modelo)).includes(f) || (d._marcaNorm || normalizar(d.marca)).includes(f))
+    .slice(0, 8);
+}
+
+function selecionarModeloExistenteAdmin(item) {
+  adminModeloSelecionadoExistente = item;
+  adminModeloInput.value = item.modelo;
+  adminMarcaSelect.value = item.marca;
+  adminNovaMarcaInput.style.display = 'none';
+  adminModeloSugestoes.innerHTML = '';
+  adminChips = (item.adaptacoes && item.adaptacoes[0] !== 'Sem Adaptação')
+    ? item.adaptacoes.map(a => {
+        const origem = dados.find(d => normalizar(d.modelo) === normalizar(a));
+        return { marca: origem ? origem.marca : null, modelo: a };
+      })
+    : [];
+  renderChipsAdmin();
+}
+
+adminModeloInput.addEventListener('input', () => {
+  adminModeloSelecionadoExistente = null;
+  const achados = buscarModelosSistema(adminModeloInput.value, null);
+  if (!achados.length) { adminModeloSugestoes.innerHTML = ''; return; }
+  adminModeloSugestoes.innerHTML = achados.map((d, i) => `
+    <button type="button" class="admin-sugestao-item" data-i="${i}">${d.marca} • ${d.modelo}</button>
+  `).join('');
+  adminModeloSugestoes.querySelectorAll('.admin-sugestao-item').forEach((btn, i) => {
+    btn.addEventListener('click', () => selecionarModeloExistenteAdmin(achados[i]));
+  });
+});
+
+adminAdaptInput.addEventListener('input', () => {
+  const slugAtual = adminModeloSelecionadoExistente
+    ? normalizarSlugModelo(adminModeloSelecionadoExistente.marca, adminModeloSelecionadoExistente.modelo)
+    : null;
+  const achados = buscarModelosSistema(adminAdaptInput.value, slugAtual);
+  if (!achados.length) { adminAdaptSugestoes.innerHTML = ''; return; }
+  adminAdaptSugestoes.innerHTML = achados.map((d, i) => `
+    <button type="button" class="admin-sugestao-item" data-i="${i}">${d.marca} • ${d.modelo}</button>
+  `).join('');
+  adminAdaptSugestoes.querySelectorAll('.admin-sugestao-item').forEach((btn, i) => {
+    btn.addEventListener('click', () => {
+      const d = achados[i];
+      const jaTem = adminChips.some(c => normalizar(c.modelo) === normalizar(d.modelo));
+      if (!jaTem) adminChips.push({ marca: d.marca, modelo: d.modelo });
+      adminAdaptInput.value = '';
+      adminAdaptSugestoes.innerHTML = '';
+      renderChipsAdmin();
+    });
+  });
+});
+
+// Permite adicionar um texto que não existe no sistema (ex: "Sem Adaptação"
+// ou um nome digitado na mão) apertando Enter — sem ligação recíproca nesse caso.
+adminAdaptInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && adminAdaptInput.value.trim()) {
+    e.preventDefault();
+    const texto = adminAdaptInput.value.trim();
+    const jaTem = adminChips.some(c => normalizar(c.modelo) === normalizar(texto));
+    if (!jaTem) adminChips.push({ marca: null, modelo: texto });
+    adminAdaptInput.value = '';
+    adminAdaptSugestoes.innerHTML = '';
+    renderChipsAdmin();
+  }
+});
+
+adminSalvarBtn.addEventListener('click', async () => {
+  adminErro.style.display = 'none';
+  adminSucesso.style.display = 'none';
+
+  const modeloNome = adminModeloInput.value.trim();
+  const marcaNome = adminMarcaSelect.value === '__nova__' ? adminNovaMarcaInput.value.trim() : adminMarcaSelect.value;
+
+  if (!modeloNome || !marcaNome) {
+    adminErro.textContent = 'Preencha o nome do modelo e escolha (ou digite) a marca.';
+    adminErro.style.display = 'block';
+    return;
+  }
+  if (!adminChips.length) {
+    adminErro.textContent = 'Adicione ao menos uma adaptação (digite "Sem Adaptação" e aperte Enter se não houver nenhuma).';
+    adminErro.style.display = 'block';
+    return;
+  }
+  if (typeof db === 'undefined') {
+    adminErro.textContent = 'O banco de dados (Firebase) não está configurado neste site — veja as instruções no topo do script.js.';
+    adminErro.style.display = 'block';
+    return;
+  }
+
+  adminSalvarBtn.disabled = true;
+  adminSalvarBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
+
+  try {
+    const nomesAdaptacoes = adminChips.map(c => c.modelo);
+    const slugPrincipal = normalizarSlugModelo(marcaNome, modeloNome);
+
+    // Salva/atualiza o modelo principal com as adaptações escolhidas.
+    await db.collection('modelos_extra').doc(slugPrincipal).set({
+      marca: marcaNome,
+      modelo: modeloNome,
+      adaptacoes: firebase.firestore.FieldValue.arrayUnion(...nomesAdaptacoes)
+    }, { merge: true });
+
+    // Ligação recíproca: cada adaptação selecionada (que tem marca conhecida)
+    // recebe o modelo novo/editado como adaptação dela também.
+    for (const c of adminChips) {
+      if (!c.marca) continue; // texto digitado livre, sem ficha própria — não dá pra ligar de volta
+      const slugOutro = normalizarSlugModelo(c.marca, c.modelo);
+      await db.collection('modelos_extra').doc(slugOutro).set({
+        marca: c.marca,
+        modelo: c.modelo,
+        adaptacoes: firebase.firestore.FieldValue.arrayUnion(modeloNome)
+      }, { merge: true });
+    }
+
+    // Atualiza a busca na hora, sem precisar recarregar a página.
+    mesclarModeloNoSistema({ marca: marcaNome, modelo: modeloNome, adaptacoes: nomesAdaptacoes });
+    adminChips.forEach(c => {
+      if (c.marca) mesclarModeloNoSistema({ marca: c.marca, modelo: c.modelo, adaptacoes: [modeloNome] });
+    });
+    indexarDados();
+    construirSlugParaTexto();
+    popularFabricantes();
+
+    adminSucesso.style.display = 'block';
+    buscaInput.value = modeloNome;
+    renderResultados(modeloNome);
+    atualizarPainelSeAberto();
+    setTimeout(fecharAdmin, 1200);
+  } catch (e) {
+    console.error(e);
+    adminErro.textContent = 'Não foi possível salvar agora. Verifique a conexão com a internet e tente de novo.';
+    adminErro.style.display = 'block';
+  } finally {
+    adminSalvarBtn.disabled = false;
+    adminSalvarBtn.innerHTML = '<i class="fas fa-floppy-disk"></i> Salvar';
+  }
+});
+
+carregarModelosExtras();
+
+const cores = {
+  samsung: { fundo:"#1428a0", texto:"#ffffff" },
+  motorola: { fundo:"#001526", texto:"#ffffff" },
+  xiaomi: { fundo:"#ff6a08", texto:"#000000" },
+  apple: { fundo:"#dcdcdc", texto:"#000000" },
+  asus: { fundo:"#000000", texto:"#ffffff" },
+  infinix: { fundo:"#8ec142", texto:"#000000" },
+  itel: { fundo:"#fd0137", texto:"#ffffff" },
+  lg: { fundo:"#a50034", texto:"#ffffff" },
+  nokia: { fundo:"#1c4598", texto:"#ffffff" },
+  oppo: { fundo:"#006b33", texto:"#ffffff" },
+  oscal: { fundo:"#9c40dd", texto:"#ffffff" },
+  realme: { fundo:"#ffc913", texto:"#000000" },
+  tecno: { fundo:"#0064fe", texto:"#ffffff" },
+  jovi: { fundo:"#1c4598", texto:"#ffffff" }
+};
+
+const fabSelect = document.getElementById('fabricante');
+const fabSelectCapa = document.getElementById('fabricanteCapa');
+
+// Função (em vez de bloco fixo) pra poder repopular os selects quando o
+// painel de admin cadastra uma marca nova, sem precisar recarregar a página.
+function popularFabricantes() {
+  const fabricantes = [...new Set(dados.map(d => d.marca))].sort();
+  const valorAtual = fabSelect.value;
+  const valorAtualCapa = fabSelectCapa.value;
+
+  fabSelect.innerHTML = '<option value="">Fabricante</option>';
+  fabSelectCapa.innerHTML = '<option value="">Fabricante</option>';
+
+  fabricantes.forEach(f => {
+    const opt = document.createElement('option');
+    opt.value = f;
+    opt.textContent = f;
+    fabSelect.appendChild(opt);
+
+    const optCapa = document.createElement('option');
+    optCapa.value = f;
+    optCapa.textContent = f;
+    fabSelectCapa.appendChild(optCapa);
+  });
+
+  if (fabricantes.includes(valorAtual)) fabSelect.value = valorAtual;
+  if (fabricantes.includes(valorAtualCapa)) fabSelectCapa.value = valorAtualCapa;
+}
+popularFabricantes();
+
+fabSelect.addEventListener('change', () => {
+  const modeloSelect = document.getElementById('modelo');
+  modeloSelect.innerHTML = '<option value="">Modelo</option>';
+  modeloSelect.disabled = !fabSelect.value;
+  
+  if (fabSelect.value) {
+    const modelos = dados.filter(d => d.marca === fabSelect.value).map(d => d.modelo);
+    modelos.forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = m;
+      opt.textContent = m;
+      modeloSelect.appendChild(opt);
+    });
+  }
+});
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+function gerarImagemPelicula() {
+  const fabricante = document.getElementById('fabricante').value;
+  const modelo = document.getElementById('modelo').value;
+  
+  if (!fabricante || !modelo) {
+    alert("Selecione a fabricante e o modelo!");
+    return;
+  }
+
+  const achado = dados.find(d => d.marca === fabricante && d.modelo === modelo);
+  if (!achado) {
+    alert("Modelo não encontrado!");
+    return;
+  }
+
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext("2d");
+  const est = cores[achado.marca.toLowerCase()] || { fundo:"#fff", texto:"#000" };
+
+  ctx.clearRect(0, 0, 591, 591);
+  ctx.fillStyle = est.fundo;
+  ctx.fillRect(0, 0, 591, 591);
+
+  const b = 12;
+  ctx.fillStyle = "#0051ff";
+  ctx.fillRect(0, 0, 591, b);
+  ctx.fillRect(0, 0, b, 591);
+  ctx.fillStyle = "#ff7a00";
+  ctx.fillRect(0, 591 - b, 591, b);
+  ctx.fillRect(591 - b, 0, b, 591);
+
+  ctx.textAlign = "center";
+  ctx.fillStyle = est.texto;
+  ctx.textBaseline = "alphabetic";
+
+  let y = b + 20;
+
+  const boxW = 300, boxH = 110;
+  const boxX = (591 - boxW) / 2;
+  const boxY = y;
+
+  ctx.shadowColor = "rgba(0,0,0,0.35)";
+  ctx.shadowBlur = 9;
+  ctx.shadowOffsetY = 4;
+  ctx.fillStyle = "#fff";
+  roundRect(ctx, boxX, boxY, boxW, boxH, 14);
+  ctx.fill();
+  ctx.shadowColor = "transparent";
+
+  const logo = new Image();
+  logo.src = `logo2/${achado.marca.toLowerCase()}.png`;
+  logo.onload = () => {
+    const imgW = boxW - 40;
+    const imgH = logo.height * (imgW / logo.width);
+    ctx.drawImage(logo, boxX + (boxW - imgW) / 2, boxY + (boxH - imgH) / 2, imgW, imgH);
+  };
+
+  y = boxY + boxH + 50;
+
+  let tamanho = 65;
+  do {
+    ctx.font = `bold ${tamanho}px Arial`;
+    tamanho--;
+  } while (ctx.measureText(achado.modelo).width > 591 - 60);
+
+  ctx.fillStyle = est.texto;
+  ctx.fillText(achado.modelo, 591 / 2, y);
+
+  y += 60;
+
+  ctx.font = "bold 30px Arial";
+  ctx.fillText("Adaptações:", 591 / 2, y);
+
+  y += 25;
+
+  const areaAltura = 591 - y - b - 10;
+  const areaLargura = 591 - 50;
+  const numAdaptacoes = achado.adaptacoes.length;
+  
+  let colunas;
+  if (numAdaptacoes <= 5) colunas = 1;
+  else if (numAdaptacoes <= 10) colunas = 2;
+  else if (numAdaptacoes <= 18) colunas = 3;
+  else colunas = 4;
+  
+  const linhasPorCol = Math.ceil(numAdaptacoes / colunas);
+  const gap = 17;
+  const larguraCol = (areaLargura - (gap * (colunas - 1))) / colunas;
+  
+  let fonte = 35;
+  let espacamento = fonte * 0.45;
+  
+  while ((linhasPorCol * (fonte + espacamento)) > areaAltura && fonte > 15) {
+    fonte -= 1;
+    espacamento = fonte * 0.45;
+  }
+  
+  ctx.font = `bold ${fonte}px Arial`;
+  let textoMuitoLongo = true;
+  
+  while (textoMuitoLongo && fonte > 15) {
+    textoMuitoLongo = false;
+    ctx.font = `bold ${fonte}px Arial`;
     
+    achado.adaptacoes.forEach(t => {
+      if (ctx.measureText(t).width > larguraCol - 8) textoMuitoLongo = true;
+    });
+    
+    if (textoMuitoLongo) {
+      fonte -= 1;
+      espacamento = fonte * 0.45;
+    }
+  }
+  
+  ctx.font = `bold ${fonte}px Arial`;
+  const inicioX = (591 - ((larguraCol * colunas) + (gap * (colunas - 1)))) / 2;
+  const alturaTotal = linhasPorCol * (fonte + espacamento) - espacamento;
+  const yInicio = y + (areaAltura - alturaTotal) / 2;
+  
+  achado.adaptacoes.forEach((t, i) => {
+    const col = Math.floor(i / linhasPorCol);
+    const lin = i % linhasPorCol;
+    const x = inicioX + col * (larguraCol + gap) + larguraCol / 2;
+    const yy = yInicio + lin * (fonte + espacamento);
+    ctx.fillText(t, x, yy);
+  });
+}
+
+function crc32(data) {
+  let crc = 0xFFFFFFFF;
+  const table = new Uint32Array(256);
+  for (let i = 0; i < 256; i++) {
+    let c = i;
+    for (let j = 0; j < 8; j++) {
+      c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    }
+    table[i] = c;
+  }
+  for (let i = 0; i < data.length; i++) {
+    crc = table[(crc ^ data[i]) & 0xFF] ^ (crc >>> 8);
+  }
+  return (crc ^ 0xFFFFFFFF) >>> 0;
+}
+
+function addDpiToPng(base64Data, dpi) {
+  const base64 = base64Data.split(',')[1];
+  const binaryString = atob(base64);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+
+  const ppm = Math.round(dpi / 0.0254);
+  const ppmBytes = new Uint8Array([
+    (ppm >> 24) & 0xFF,
+    (ppm >> 16) & 0xFF,
+    (ppm >> 8) & 0xFF,
+    ppm & 0xFF
+  ]);
+
+  const physData = new Uint8Array(9);
+  physData.set(ppmBytes, 0);
+  physData.set(ppmBytes, 4);
+  physData[8] = 1;
+
+  const crcData = new Uint8Array(4 + 9);
+  crcData[0] = 0x70; crcData[1] = 0x48; crcData[2] = 0x59; crcData[3] = 0x73;
+  crcData.set(physData, 4);
+  const crc = crc32(crcData);
+
+  const crcBytes = new Uint8Array([
+    (crc >> 24) & 0xFF,
+    (crc >> 16) & 0xFF,
+    (crc >> 8) & 0xFF,
+    crc & 0xFF
+  ]);
+
+  const physChunk = new Uint8Array(4 + 4 + 9 + 4);
+  physChunk[0] = 0; physChunk[1] = 0; physChunk[2] = 0; physChunk[3] = 9;
+  physChunk[4] = 0x70; physChunk[5] = 0x48; physChunk[6] = 0x59; physChunk[7] = 0x73;
+  physChunk.set(physData, 8);
+  physChunk.set(crcBytes, 17);
+
+  const newBytes = new Uint8Array(bytes.length + physChunk.length);
+  newBytes.set(bytes.subarray(0, 33), 0);
+  newBytes.set(physChunk, 33);
+  newBytes.set(bytes.subarray(33), 33 + physChunk.length);
+
+  let binary = '';
+  for (let i = 0; i < newBytes.length; i++) {
+    binary += String.fromCharCode(newBytes[i]);
+  }
+  return 'data:image/png;base64,' + btoa(binary);
+}
+
+function baixarImagemPelicula() {
+  const fabricante = document.getElementById('fabricante').value;
+  const modelo = document.getElementById('modelo').value;
+  
+  if (!fabricante || !modelo) {
+    alert("Gere a imagem primeiro!");
+    return;
+  }
+
+  const canvas = document.getElementById('canvas');
+  const a = document.createElement("a");
+  a.download = `${fabricante} ${modelo}.png`;
+  a.href = addDpiToPng(canvas.toDataURL("image/png"), 300);
+  a.click();
+}
+
+function gerarImagemCapa() {
+  const fabricante = document.getElementById('fabricanteCapa').value;
+  const linha1 = document.getElementById('linha1Capa').value.trim();
+  const linha2 = document.getElementById('linha2Capa').value.trim();
+  const linha3 = document.getElementById('linha3Capa').value.trim();
+  
+  if (!fabricante || (!linha1 && !linha2 && !linha3)) {
+    alert("Selecione a fabricante e preencha pelo menos uma linha do modelo!");
+    return;
+  }
+
+  const canvas = document.getElementById('canvasCapa');
+  const ctx = canvas.getContext("2d");
+  const est = cores[fabricante.toLowerCase()] || { fundo:"#0047AB", texto:"#000000" };
+
+  // 1. Fundo totalmente branco
+  ctx.clearRect(0, 0, 591, 591);
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, 591, 591);
+
+  // 2. Borda com a cor da fabricante selecionada
+  const b = 15;
+  ctx.fillStyle = est.fundo;
+  ctx.fillRect(0, 0, 591, b);
+  ctx.fillRect(0, 0, b, 591);
+  ctx.fillRect(0, 591 - b, 591, b);
+  ctx.fillRect(591 - b, 0, b, 591);
+
+  // 3. Círculo preto de 5x5 mm (marca de corte/furo)
+  const mmToPx = 591 / 50;
+  const raioCirculo = 2.5 * mmToPx; 
+  const centroX = 25 * mmToPx;      
+  const centroY = 10 * mmToPx;      
+
+  ctx.beginPath();
+  ctx.arc(centroX, centroY, raioCirculo, 0, 2 * Math.PI);
+  ctx.fillStyle = "#000000";
+  ctx.fill();
+
+  ctx.textAlign = "center";
+  ctx.textBaseline = "alphabetic";
+
+  // 4. Box para a logo da fabricante (posicionado abaixo do círculo)
+  const boxW = 320;
+  const boxH = 120;
+  const boxX = (591 - boxW) / 2;
+  const boxY = 180; 
+
+
+
+  // 5. Carregar e desenhar a logo
+  const logo = new Image();
+  logo.src = `logo2/${fabricante.toLowerCase()}.png`;
+  
+  const linhasTexto = [linha1, linha2, linha3].filter(l => l !== "");
+  
+  logo.onload = () => {
+    const maxImgW = boxW - 40;
+    const imgRatio = logo.width / logo.height;
+    let imgW = maxImgW;
+    let imgH = imgW / imgRatio;
+    
+    if (imgH > boxH - 20) {
+      imgH = boxH - 20;
+      imgW = imgH * imgRatio;
+    }
+    
+    ctx.drawImage(logo, boxX + (boxW - imgW) / 2, boxY + (boxH - imgH) / 2, imgW, imgH);
+    desenharTextoModeloCapa(ctx, linhasTexto, b, boxY + boxH);
+  };
+  
+  // Fallback caso a imagem não carregue
+  logo.onerror = () => {
+    ctx.fillStyle = est.fundo;
+    ctx.font = "bold 42px Arial";
+    ctx.fillText(fabricante.toUpperCase(), 591 / 2, boxY + boxH / 2 + 15);
+    desenharTextoModeloCapa(ctx, linhasTexto, b, boxY + boxH);
+  };
+}
+
+function desenharTextoModeloCapa(ctx, linhasTexto, b, startY) {
+  let y = startY + 40;
+  ctx.fillStyle = "#000000"; 
+  ctx.textAlign = "center";
+  
+  const maxWidth = 591 - 80; // Margem de 40px de cada lado
+  let tamanhoFonte = 60;
+  
+  // Filtrar linhas vazias
+  const linhas = linhasTexto.filter(l => l.length > 0);
+  
+  // Ajustar fonte para caber na largura máxima
+  while (tamanhoFonte >= 30) {
+    let cabe = true;
+    ctx.font = `bold ${tamanhoFonte}px Arial`;
+    for (let i = 0; i < linhas.length; i++) {
+      if (ctx.measureText(linhas[i]).width > maxWidth) {
+        cabe = false;
+        break;
+      }
+    }
+    if (cabe) break;
+    tamanhoFonte -= 2;
+  }
+  
+  const alturaLinha = tamanhoFonte * 1.3;
+  const alturaTotalTexto = linhas.length * alturaLinha;
+  const espacoRestante = 591 - b - y;
+  
+  // Centralizar o bloco de texto no espaço restante abaixo da logo
+  const yInicio = y + (espacoRestante - alturaTotalTexto) / 2 + alturaLinha;
+  
+  linhas.forEach((linha, i) => {
+    ctx.fillText(linha, 591 / 2, yInicio + i * alturaLinha);
+  });
+}
+
+function baixarImagemCapa() {
+  const fabricante = document.getElementById('fabricanteCapa').value;
+  const linha1 = document.getElementById('linha1Capa').value.trim();
+  const linha2 = document.getElementById('linha2Capa').value.trim();
+  const linha3 = document.getElementById('linha3Capa').value.trim();
+  
+  if (!fabricante || (!linha1 && !linha2 && !linha3)) {
+    alert("Gere a imagem primeiro!");
+    return;
+  }
+
+  const canvas = document.getElementById('canvasCapa');
+  const partesModelo = [linha1, linha2, linha3].filter(p => p !== "").join(" ");
+  const a = document.createElement("a");
+  a.download = `${fabricante} ${partesModelo}.png`;
+  a.href = addDpiToPng(canvas.toDataURL("image/png"), 300);
+  a.click();
+}
+
+renderResultados('');
