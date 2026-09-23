@@ -6,12 +6,16 @@ const ctx = canvas.getContext("2d");
 const W = canvas.width, H = canvas.height;
 const DESIGN_W = 900, DESIGN_H = 1311;
 
-const fieldIds = ["manufacturer","model","storage","ram","warrantyQty","warrantyUnit","cashPrice","price5","price10","price18","condition","display","refresh","processor","specRam","rearCamera","frontCamera","android","network","battery","logo1","logo2"];
+const fieldIds = ["manufacturer","model","storage","ram","warrantyQty","warrantyUnit","cashPrice","price5","price10","price18","condition","display","refresh","processor","rearCamera","frontCamera","android","network","battery","logo1","logo2"];
 let generatedUrl = "";
 let toastTimer;
 let activeMode = 1;
 let headerLogo = null;
 let headerLogoData = "";
+let logo1Image = null;
+let logo1ImageData = "";
+let logo2Image = null;
+let logo2ImageData = "";
 
 // Drawing and interaction logic is added in sections below.
 
@@ -60,7 +64,7 @@ function drawImageContain(img, x, y, w, h) {
   ctx.drawImage(img, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
 }
 
-function drawLogo(type, x, y, w, h) {
+function drawLogo(type, slot, x, y, w, h) {
   if (type === "none") return;
   ctx.save();
   if (type === "anatel") {
@@ -73,6 +77,11 @@ function drawLogo(type, x, y, w, h) {
     roundedRect(x + 10,y + 18,w - 20,h - 36,12,"#fff","#cdd3d6",2);
     if (headerLogo) drawImageContain(headerLogo,x+22,y+29,w-44,h-58);
     else {ctx.fillStyle="#7b868d";ctx.textAlign="center";ctx.font="800 17px sans-serif";ctx.fillText("LOGOTIPO DA LOJA",x+w/2,y+h/2+6);}
+  } else if (type === "custom") {
+    const img = slot === 1 ? logo1Image : logo2Image;
+    roundedRect(x + 10,y + 18,w - 20,h - 36,12,"#fff","#cdd3d6",2);
+    if (img) drawImageContain(img,x+22,y+29,w-44,h-58);
+    else {ctx.fillStyle="#7b868d";ctx.textAlign="center";ctx.font="800 17px sans-serif";ctx.fillText("SUA IMAGEM",x+w/2,y+h/2+6);}
   } else {
     const brand = safe(value("manufacturer"), "MARCA");
     const key = brand.toLocaleLowerCase("pt-BR");
@@ -166,17 +175,16 @@ function drawLowerSection(finalMode) {
 
   const specs = [
     ["CONDIÇÃO", value("condition")], ["DISPLAY", value("display")], ["TELA", value("refresh")],
-    ["PROCESSADOR", value("processor")], ["MEMÓRIA RAM", value("specRam") || value("ram")],
+    ["PROCESSADOR", value("processor")], ["MEMÓRIA RAM", value("ram")],
     ["CÂMERA TRASEIRA", value("rearCamera")], ["CÂMERA FRONTAL", value("frontCamera")],
     ["SISTEMA", value("android")], ["REDE", value("network")], ["BATERIA", value("battery")]
   ];
   specs.forEach(([label,text], index) => {
-    const y = 831 + index * 39;
-    ctx.beginPath();ctx.arc(64,y-6,4,0,Math.PI*2);ctx.fillStyle=index===0?"#f05a22":"#1f4ea1";ctx.fill();
-    ctx.fillStyle="#596873";ctx.font="900 19px sans-serif";ctx.fillText(`${label}:`,78,y+4);
-    const offset=ctx.measureText(`${label}:`).width+9;
-    const size=fitText(safe(text),390-offset,28,"sans-serif","800");ctx.fillStyle="#183247";ctx.font=`800 ${size}px sans-serif`;ctx.fillText(safe(text),78+offset,y+4);
-    if(index < specs.length-1){ctx.fillStyle="#e7e5df";ctx.fillRect(78,y+20,398,1)}
+    const rowY = 830 + index * 40;
+    ctx.beginPath();ctx.arc(64,rowY-3,4,0,Math.PI*2);ctx.fillStyle=index===0?"#f05a22":"#1f4ea1";ctx.fill();
+    ctx.fillStyle="#8a949c";ctx.font="900 13px sans-serif";ctx.fillText(`${label}:`,78,rowY);
+    const size=fitText(safe(text),398,20,"sans-serif","800");ctx.fillStyle="#183247";ctx.font=`800 ${size}px sans-serif`;ctx.fillText(safe(text),78,rowY+23);
+    if(index < specs.length-1){ctx.fillStyle="#e7e5df";ctx.fillRect(78,rowY+32,398,1)}
   });
 
   // System logo zone
@@ -186,8 +194,8 @@ function drawLowerSection(finalMode) {
   ctx.fillStyle="#d6f34f";ctx.beginPath();ctx.arc(799,1102,90,0,Math.PI*2);ctx.fill();
   roundedRect(580,805,180,180,12,"rgba(255,255,255,.94)","#d5dadd",2);
   roundedRect(580,1000,180,180,12,"rgba(255,255,255,.94)","#d5dadd",2);
-  drawLogo(value("logo1"),586,811,168,168);
-  drawLogo(value("logo2"),586,1006,168,168);
+  drawLogo(value("logo1"),1,586,811,168,168);
+  drawLogo(value("logo2"),2,586,1006,168,168);
   ctx.restore();
 
   roundedRect(586,1160,168,27,3,"#10202c");ctx.fillStyle="#fff";ctx.font="800 10px sans-serif";ctx.fillText("PADRÃO 512 × 512",610,1178);
@@ -210,7 +218,7 @@ function markDirty() {
 }
 
 function saveDraft() {
-  const draft = {activeMode, headerLogoData};
+  const draft = {activeMode, headerLogoData, logo1ImageData, logo2ImageData};
   fieldIds.forEach(id => draft[id] = value(id));
   try { localStorage.setItem("vitrine-manual-v2", JSON.stringify(draft)); } catch (_) {}
 }
@@ -222,6 +230,9 @@ function restoreDraft() {
     fieldIds.forEach(id => { if (draft[id] !== undefined) $("#" + id).value = draft[id]; });
     if ([1,2,3].includes(Number(draft.activeMode))) activeMode = Number(draft.activeMode);
     if (draft.headerLogoData) setHeaderLogo(draft.headerLogoData, false);
+    if (draft.logo1ImageData) setLogoImage(1, draft.logo1ImageData, false);
+    if (draft.logo2ImageData) setLogoImage(2, draft.logo2ImageData, false);
+    updateLogoUploadVisibility();
   } catch (_) {}
 }
 
@@ -262,6 +273,49 @@ function handleHeaderLogo(file) {
   };
   reader.onerror=()=>showToast("Não foi possível ler o arquivo");
   reader.readAsDataURL(file);
+}
+
+function setLogoImage(slot, dataUrl, persist = true) {
+  const img = new Image();
+  img.onload = () => {
+    if (slot === 1) { logo1Image = img; logo1ImageData = dataUrl; }
+    else { logo2Image = img; logo2ImageData = dataUrl; }
+    const preview = $(`#logo${slot}UploadPreview`);
+    preview.src = dataUrl;
+    preview.parentElement.classList.add("has-image");
+    if (persist) { markDirty(); showToast(`Imagem do logotipo ${slot} carregada`); }
+    else renderPoster(false);
+  };
+  img.onerror = () => showToast("Não foi possível carregar esta imagem");
+  img.src = dataUrl;
+}
+
+function handleLogoUpload(slot, file) {
+  if (!file) return;
+  if (!file.type.startsWith("image/")) { showToast("Escolha um arquivo de imagem válido"); return; }
+  const reader = new FileReader();
+  reader.onload = () => {
+    const source = new Image();
+    source.onload = () => {
+      const temp = document.createElement("canvas"); temp.width = 512; temp.height = 512;
+      const tempCtx = temp.getContext("2d");
+      const scale = Math.min(472 / source.naturalWidth, 472 / source.naturalHeight);
+      const width = source.naturalWidth * scale, height = source.naturalHeight * scale;
+      tempCtx.drawImage(source, (512 - width) / 2, (512 - height) / 2, width, height);
+      setLogoImage(slot, temp.toDataURL("image/png"));
+    };
+    source.onerror = () => showToast("Arquivo de imagem inválido");
+    source.src = reader.result;
+  };
+  reader.onerror = () => showToast("Não foi possível ler o arquivo");
+  reader.readAsDataURL(file);
+}
+
+function updateLogoUploadVisibility() {
+  [1, 2].forEach(slot => {
+    const isCustom = value(`logo${slot}`) === "custom";
+    $(`#logo${slot}UploadField`).hidden = !isCustom;
+  });
 }
 
 function selectMode(mode) {
@@ -316,11 +370,16 @@ function resetEditor() {
 fieldIds.forEach(id => $("#" + id).addEventListener("input", markDirty));
 document.querySelectorAll(".tab").forEach(tab => tab.addEventListener("click", () => selectMode(tab.dataset.mode)));
 $("#headerLogo").addEventListener("change", event => {handleHeaderLogo(event.target.files[0]);event.target.value="";});
+$("#logo1Upload").addEventListener("change", event => {handleLogoUpload(1, event.target.files[0]);event.target.value="";});
+$("#logo2Upload").addEventListener("change", event => {handleLogoUpload(2, event.target.files[0]);event.target.value="";});
+$("#logo1").addEventListener("change", updateLogoUploadVisibility);
+$("#logo2").addEventListener("change", updateLogoUploadVisibility);
 $("#generateBtn").addEventListener("click", generateImage);
 $("#downloadBtn").addEventListener("click", downloadImage);
 $("#resetBtn").addEventListener("click", resetEditor);
 
 restoreDraft();
+updateLogoUploadVisibility();
 updateModeUI();
 $("#dateLabel").textContent = monthYear();
 renderPoster(false);
