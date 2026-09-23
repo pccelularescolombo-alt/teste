@@ -77,25 +77,29 @@ function drawImageContain(img, x, y, w, h) {
 function drawLogo(type, slot, x, y, w, h) {
   if (type === "none") return;
   ctx.save();
+  // Fator de escala: os desenhos abaixo foram calibrados para uma caixa de 168×168.
+  // Ao usar caixas menores (ex.: os logotipos 1 e 2 colados no canto), tudo escala
+  // proporcionalmente, sem estourar os limites da caixa.
+  const s = w / 168;
   if (type === "anatel") {
-    ctx.translate(x + w / 2, y + h / 2 - 8);
-    ctx.lineWidth = 18;ctx.lineCap = "round";
-    ctx.strokeStyle="#ffdc2c";ctx.beginPath();ctx.arc(8,0,70,-1.15,1.15);ctx.stroke();
-    ctx.strokeStyle="#2f65ad";ctx.beginPath();ctx.arc(-25,15,38,-1.25,1.25);ctx.stroke();
-    ctx.fillStyle="#2ea85e";ctx.textAlign="center";ctx.font="italic 900 28px sans-serif";ctx.fillText("ANATEL",0,76);
+    ctx.translate(x + w / 2, y + h / 2 - 8 * s);
+    ctx.lineWidth = 18 * s; ctx.lineCap = "round";
+    ctx.strokeStyle="#ffdc2c";ctx.beginPath();ctx.arc(8*s,0,70*s,-1.15,1.15);ctx.stroke();
+    ctx.strokeStyle="#2f65ad";ctx.beginPath();ctx.arc(-25*s,15*s,38*s,-1.25,1.25);ctx.stroke();
+    ctx.fillStyle="#2ea85e";ctx.textAlign="center";ctx.font=`italic 900 ${28*s}px sans-serif`;ctx.fillText("ANATEL",0,76*s);
   } else if (type === "store") {
     if (headerLogo) drawImageContain(headerLogo,x,y,w,h);
-    else {ctx.fillStyle="#7b868d";ctx.textAlign="center";ctx.font="800 17px sans-serif";ctx.fillText("LOGOTIPO DA LOJA",x+w/2,y+h/2+6);}
+    else {ctx.fillStyle="#7b868d";ctx.textAlign="center";ctx.font=`800 ${Math.max(11,17*s)}px sans-serif`;ctx.fillText("LOGOTIPO DA LOJA",x+w/2,y+h/2+6*s);}
   } else if (type === "custom") {
     const img = slot === 1 ? logo1Image : logo2Image;
     if (img) drawImageContain(img,x,y,w,h);
-    else {ctx.fillStyle="#7b868d";ctx.textAlign="center";ctx.font="800 17px sans-serif";ctx.fillText("SUA IMAGEM",x+w/2,y+h/2+6);}
+    else {ctx.fillStyle="#7b868d";ctx.textAlign="center";ctx.font=`800 ${Math.max(11,17*s)}px sans-serif`;ctx.fillText("SUA IMAGEM",x+w/2,y+h/2+6*s);}
   } else {
     const brand = safe(value("manufacturer"), "MARCA");
     const key = brand.toLocaleLowerCase("pt-BR");
     const palette = key.includes("realme") ? ["#ffd51f","#111"] : key.includes("samsung") ? ["#0c4da2","#fff"] : key.includes("motorola") ? ["#e6e8ea","#111"] : key.includes("xiaomi") ? ["#ff6900","#fff"] : key.includes("apple") ? ["#111","#fff"] : ["#10202c","#fff"];
-    roundedRect(x + 8,y + 30,w - 16,h - 60,10,palette[0]);
-    const size=fitText(upper(brand),w-40,34,"sans-serif","900");ctx.fillStyle=palette[1];ctx.textAlign="center";ctx.font=`900 ${size}px sans-serif`;ctx.fillText(upper(brand),x+w/2,y+h/2+11);
+    roundedRect(x + 8*s,y + 30*s,w - 16*s,h - 60*s,10,palette[0]);
+    const size=fitText(upper(brand),w-40*s,Math.max(12,34*s),"sans-serif","900",Math.max(10,12*s));ctx.fillStyle=palette[1];ctx.textAlign="center";ctx.font=`900 ${size}px sans-serif`;ctx.fillText(upper(brand),x+w/2,y+h/2+11*s);
   }
   ctx.restore();ctx.textAlign="left";
 }
@@ -192,25 +196,45 @@ function drawModeThree() {
 
 function drawLowerSection(finalMode) {
   ctx.fillStyle="#10202c";ctx.fillRect(55,746,790,4);
-  ctx.font="900 21px sans-serif";ctx.fillStyle="#f05a22";ctx.fillText("FICHA TÉCNICA",56,789);
+  ctx.font="900 27px sans-serif";ctx.fillStyle="#f05a22";ctx.fillText("FICHA TÉCNICA",56,792);
+
+  // Logotipos 1 e 2: colados um no outro (sem espaço entre eles), ao longo do
+  // lado direito da ficha técnica, centralizados na altura da seção.
+  const sectionTop = 800, sectionBottom = 1216;
+  const logoW = 160, logoH = 160;
+  const logoX = 845 - logoW;
+  const logoY1 = sectionTop + (sectionBottom - sectionTop - logoH * 2) / 2;
+  const logoY2 = logoY1 + logoH;
+  drawLogo(value("logo1"),1,logoX,logoY1,logoW,logoH);
+  drawLogo(value("logo2"),2,logoX,logoY2,logoW,logoH);
 
   const specs = [
-    ["CONDIÇÃO", value("condition")], ["DISPLAY", value("display")], ["TELA", value("refresh")],
+    ["CONDIÇÃO", value("condition")], ["DISPLAY", value("display")], ["TAXA DE ATUALIZAÇÃO", value("refresh")],
     ["PROCESSADOR", value("processor")], ["MEMÓRIA RAM", value("ram")],
     ["CÂMERA TRASEIRA", value("rearCamera")], ["CÂMERA FRONTAL", value("frontCamera")],
     ["SISTEMA", value("android")], ["REDE", value("network")], ["BATERIA", value("battery")]
   ];
-  specs.forEach(([label,text], index) => {
-    const rowY = 830 + index * 40;
-    ctx.beginPath();ctx.arc(64,rowY-3,4,0,Math.PI*2);ctx.fillStyle=index===0?"#f05a22":"#1f4ea1";ctx.fill();
-    ctx.fillStyle="#8a949c";ctx.font="900 13px sans-serif";ctx.fillText(`${label}:`,78,rowY);
-    const size=fitText(safe(text),398,20,"sans-serif","800");ctx.fillStyle="#183247";ctx.font=`800 ${size}px sans-serif`;ctx.fillText(safe(text),78,rowY+23);
-    if(index < specs.length-1){ctx.fillStyle="#e7e5df";ctx.fillRect(78,rowY+32,398,1)}
-  });
 
-  // Zona de logotipos (sem fundo, sem caixas e sem tarja)
-  drawLogo(value("logo1"),1,586,811,168,168);
-  drawLogo(value("logo2"),2,586,1006,168,168);
+  // Coluna única com rótulo e valor na mesma linha, ocupando toda a largura
+  // disponível ao lado dos logotipos, com fontes bem maiores — pensada para
+  // continuar legível quando a imagem é reduzida no Word.
+  const specsRightEdge = logoX - 22;
+  const colX = 55;
+  const colW = specsRightEdge - colX;
+  const rows = specs.length;
+  const rowH = (sectionBottom - sectionTop) / rows;
+
+  specs.forEach(([label, text], index) => {
+    const rowY = sectionTop + index * rowH + rowH * 0.68;
+    ctx.beginPath();ctx.arc(colX+5,rowY-rowH*0.28,4,0,Math.PI*2);ctx.fillStyle=index===0?"#f05a22":"#1f4ea1";ctx.fill();
+    ctx.fillStyle="#8a949c";ctx.font="900 15px sans-serif";
+    const labelText = `${label}:`;
+    ctx.fillText(labelText, colX+15, rowY);
+    const labelW = ctx.measureText(labelText).width + 10;
+    const size=fitText(safe(text),colW-labelW-15,27,"sans-serif","800",18);
+    ctx.fillStyle="#183247";ctx.font=`800 ${size}px sans-serif`;ctx.fillText(safe(text),colX+15+labelW,rowY);
+    if(index < rows-1){ctx.fillStyle="#e7e5df";ctx.fillRect(colX+15,sectionTop+(index+1)*rowH-4,colW-15,1.3)}
+  });
 
   // Footer
   ctx.fillStyle="#10202c";ctx.fillRect(55,1227,790,2);
