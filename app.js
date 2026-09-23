@@ -5,8 +5,10 @@ const canvas = $("#poster");
 const ctx = canvas.getContext("2d");
 const W = canvas.width, H = canvas.height;
 const DESIGN_W = 900, DESIGN_H = 1311;
+// Área do logotipo principal (topo, centralizado, retangular ~3:1)
+const HEADER_LOGO = {w:420, h:135, x:(DESIGN_W-420)/2, y:30};
 
-const fieldIds = ["manufacturer","model","storage","ram","warrantyQty","warrantyUnit","cashPrice","price5","price10","price18","condition","display","refresh","processor","rearCamera","frontCamera","android","network","battery","logo1","logo2"];
+const fieldIds = ["manufacturer","model","storage","ram","warrantyQty","warrantyUnit","cashPrice","total5","total10","total18","condition","display","refresh","processor","rearCamera","frontCamera","android","network","battery","logo1","logo2"];
 let generatedUrl = "";
 let toastTimer;
 let activeMode = 1;
@@ -30,10 +32,10 @@ function roundedRect(x, y, w, h, r, fill, stroke, lineWidth = 1) {
   if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = lineWidth; ctx.stroke(); }
 }
 
-function fitText(text, maxWidth, startSize, family = "Georgia", weight = "700") {
+function fitText(text, maxWidth, startSize, family = "Georgia", weight = "700", minSize = 18) {
   let size = startSize;
   do { ctx.font = `${weight} ${size}px ${family}`; size -= 1; }
-  while (ctx.measureText(text).width > maxWidth && size > 18);
+  while (ctx.measureText(text).width > maxWidth && size > minSize);
   return size + 1;
 }
 
@@ -55,6 +57,14 @@ function moneyNumber(input) {
 function money(input) {
   if (String(input ?? "").trim() === "") return "—";
   return moneyNumber(input).toLocaleString("pt-BR", {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+
+function hasValue(input) { return String(input ?? "").trim() !== "" && moneyNumber(input) > 0; }
+
+// Parcela = valor total ÷ número de parcelas, arredondada para centavos.
+function installmentValue(total, count) {
+  if (!hasValue(total) || !count) return "";
+  return Math.round(moneyNumber(total) / count * 100) / 100;
 }
 
 function drawImageContain(img, x, y, w, h) {
@@ -99,11 +109,12 @@ function renderPoster(finalMode = false) {
   ctx.fillStyle = "#fffefb"; ctx.fillRect(0,0,DESIGN_W,DESIGN_H);
   ctx.strokeStyle = "#1f4ea1"; ctx.lineWidth = 5; ctx.strokeRect(12,12,DESIGN_W-24,DESIGN_H-24);
 
-  // Uploaded store logo
-  if (headerLogo) drawImageContain(headerLogo,55,34,125,125);
+  // Logotipo da loja: retangular, centralizado no topo
+  if (headerLogo) drawImageContain(headerLogo,HEADER_LOGO.x,HEADER_LOGO.y,HEADER_LOGO.w,HEADER_LOGO.h);
   else {
-    roundedRect(55,34,125,125,8,"#f5f3ed","#c8ced1",2);
-    ctx.fillStyle="#7b868d";ctx.textAlign="center";ctx.font="800 14px sans-serif";ctx.fillText("SUA LOGO",117,91);ctx.font="700 11px sans-serif";ctx.fillText("512 × 512",117,111);ctx.textAlign="left";
+    roundedRect(HEADER_LOGO.x,HEADER_LOGO.y,HEADER_LOGO.w,HEADER_LOGO.h,10,"#f5f3ed","#c8ced1",2);
+    const cx=HEADER_LOGO.x+HEADER_LOGO.w/2, cy=HEADER_LOGO.y+HEADER_LOGO.h/2;
+    ctx.fillStyle="#7b868d";ctx.textAlign="center";ctx.font="800 20px sans-serif";ctx.fillText("SUA LOGO",cx,cy-2);ctx.font="700 13px sans-serif";ctx.fillText("Formato retangular · 3:1",cx,cy+22);ctx.textAlign="left";
   }
 
   // Warranty seal
@@ -137,35 +148,48 @@ function drawCashHeadline(y = 410) {
   const size=fitText(cash,625,100,"sans-serif","900");ctx.font=`900 ${size}px sans-serif`;ctx.fillText(cash,137,y+81);
 }
 
-function drawInstallmentBox(count, price, x, y, w, h, highlighted = false, caption = "") {
+function drawInstallmentBox(count, total, x, y, w, h, highlighted = false, caption = "") {
   roundedRect(x,y,w,h,10,highlighted?"#fff0e8":"#f5f3ed",highlighted?"#f05a22":"#d5d9db",highlighted?3:2);
   ctx.fillStyle=highlighted?"#f05a22":"#1f4ea1";ctx.font="900 35px sans-serif";ctx.fillText(`${count}×`,x+18,y+40);
-  ctx.fillStyle="#65737d";ctx.font="800 14px sans-serif";ctx.fillText("DE",x+19,y+68);
-  const priceText=`R$ ${money(price)}`;
-  const size=fitText(priceText,w-36,44,"sans-serif","900");ctx.fillStyle="#183247";ctx.font=`900 ${size}px sans-serif`;ctx.fillText(priceText,x+18,y+113);
-  if(caption){ctx.fillStyle="#65737d";ctx.font="800 12px sans-serif";ctx.fillText(caption,x+18,y+h-15);}
+  ctx.fillStyle="#65737d";ctx.font="800 14px sans-serif";ctx.fillText("DE",x+19,y+66);
+
+  // Valor da parcela (calculado a partir do total informado)
+  const installment = installmentValue(total, count);
+  const priceText=`R$ ${money(installment)}`;
+  const size=fitText(priceText,w-36,44,"sans-serif","900");ctx.fillStyle="#183247";ctx.font=`900 ${size}px sans-serif`;ctx.fillText(priceText,x+18,y+112);
+
+  // Valor total logo abaixo da parcela
+  ctx.fillStyle=highlighted?"#f4c3ad":"#d5d9db";ctx.fillRect(x+18,y+126,w-36,1.5);
+  ctx.fillStyle="#65737d";ctx.font="800 13px sans-serif";ctx.fillText("TOTAL",x+18,y+150);
+  const labelW=ctx.measureText("TOTAL").width+8;
+  const totalText=`R$ ${money(hasValue(total)?total:"")}`;
+  const totalSize=fitText(totalText,w-36-labelW,22,"sans-serif","800",11);
+  ctx.fillStyle="#31475b";ctx.font=`800 ${totalSize}px sans-serif`;ctx.fillText(totalText,x+18+labelW,y+150);
+
+  if(caption){ctx.fillStyle="#65737d";ctx.font="800 12px sans-serif";ctx.fillText(caption,x+18,y+h-14);}
 }
 
 function drawModeOne() {
   drawCashHeadline(403);
-  ctx.fillStyle="#10202c";ctx.font="900 17px sans-serif";ctx.fillText("CONDIÇÕES PARCELADAS",57,535);
-  drawInstallmentBox(5,value("price5"),55,552,250,150);
-  drawInstallmentBox(10,value("price10"),325,552,250,150);
-  drawInstallmentBox(18,value("price18"),595,552,250,150,true);
+  ctx.fillStyle="#10202c";ctx.font="900 17px sans-serif";ctx.fillText("CONDIÇÕES PARCELADAS",57,522);
+  drawInstallmentBox(5,value("total5"),55,538,250,178);
+  drawInstallmentBox(10,value("total10"),325,538,250,178);
+  drawInstallmentBox(18,value("total18"),595,538,250,178,true);
 }
 
 function drawModeTwo() {
   drawCashHeadline(410);
-  ctx.fillStyle="#10202c";ctx.font="900 17px sans-serif";ctx.fillText("ESCOLHA UMA CONDIÇÃO PARCELADA",57,542);
-  drawInstallmentBox(5,value("price5"),55,560,385,142);
-  drawInstallmentBox(10,value("price10"),460,560,385,142,true);
+  ctx.fillStyle="#10202c";ctx.font="900 17px sans-serif";ctx.fillText("ESCOLHA UMA CONDIÇÃO PARCELADA",57,529);
+  drawInstallmentBox(5,value("total5"),55,545,385,178);
+  drawInstallmentBox(10,value("total10"),460,545,385,178,true);
 }
 
 function drawModeThree() {
   drawCashHeadline(397);
-  ctx.fillStyle="#10202c";ctx.font="900 17px sans-serif";ctx.fillText("CONDIÇÕES PARCELADAS",57,529);
-  drawInstallmentBox(5,value("cashPrice")?moneyNumber(value("cashPrice"))/5:"",55,546,385,156,false,"MESMO PREÇO DO VALOR À VISTA");
-  drawInstallmentBox(10,value("price10"),460,546,385,156,true,"CONDIÇÃO INDEPENDENTE");
+  ctx.fillStyle="#10202c";ctx.font="900 17px sans-serif";ctx.fillText("CONDIÇÕES PARCELADAS",57,510);
+  // 5x: o total é o próprio valor à vista; a parcela é calculada em cima dele
+  drawInstallmentBox(5,value("cashPrice"),55,526,385,198,false,"MESMO PREÇO DO VALOR À VISTA");
+  drawInstallmentBox(10,value("total10"),460,526,385,198,true,"CONDIÇÃO INDEPENDENTE");
 }
 
 function drawLowerSection(finalMode) {
@@ -209,7 +233,15 @@ function drawLowerSection(finalMode) {
   }
 }
 
+function updateInstallmentHints() {
+  [[5,"total5","calc5"],[10,"total10","calc10"],[18,"total18","calc18"]].forEach(([count,input,hint]) => {
+    const parcela = installmentValue(value(input), count);
+    $("#" + hint).textContent = parcela === "" ? "" : `${count}× de R$ ${money(parcela)}`;
+  });
+}
+
 function markDirty() {
+  updateInstallmentHints();
   renderPoster(false);
   if (generatedUrl) { URL.revokeObjectURL(generatedUrl); generatedUrl = ""; }
   $("#downloadBtn").disabled = true;
@@ -261,11 +293,11 @@ function handleHeaderLogo(file) {
   reader.onload = () => {
     const source = new Image();
     source.onload = () => {
-      const temp=document.createElement("canvas");temp.width=512;temp.height=512;
-      const tempCtx=temp.getContext("2d");
-      const scale=Math.min(472/source.naturalWidth,472/source.naturalHeight);
-      const width=source.naturalWidth*scale,height=source.naturalHeight*scale;
-      tempCtx.drawImage(source,(512-width)/2,(512-height)/2,width,height);
+      // Mantém a proporção original (retangular); só reduz se for muito grande
+      const scale=Math.min(1,1024/source.naturalWidth,1024/source.naturalHeight);
+      const temp=document.createElement("canvas");
+      temp.width=Math.max(1,Math.round(source.naturalWidth*scale));temp.height=Math.max(1,Math.round(source.naturalHeight*scale));
+      temp.getContext("2d").drawImage(source,0,0,temp.width,temp.height);
       setHeaderLogo(temp.toDataURL("image/png"));
     };
     source.onerror=()=>showToast("Arquivo de imagem inválido");
@@ -332,13 +364,13 @@ function updateModeUI() {
     tab.querySelector("small").textContent=selected?"Selecionado":inactiveLabels[tab.dataset.mode];
   });
   const rules = {
-    1:"Aba 1: apresenta à vista, 5x, 10x e 18x em boxes individuais.",
-    2:"Aba 2: apresenta à vista, 5x ou 10x em boxes alinhados.",
-    3:"Aba 3: a parcela de 5x é calculada pelo preço à vista; o valor de 10x permanece independente."
+    1:"Aba 1: à vista, 5x, 10x e 18x. Informe o valor TOTAL de cada parcelamento: o sistema calcula a parcela e mostra o total abaixo dela.",
+    2:"Aba 2: à vista, 5x ou 10x. Informe o valor TOTAL de cada parcelamento: o sistema calcula a parcela e mostra o total abaixo dela.",
+    3:"Aba 3: o total do 5x é o valor à vista (parcela = à vista ÷ 5). Informe o valor TOTAL do 10x: o sistema calcula a parcela e mostra o total abaixo dela."
   };
   $("#pricingRule").textContent = rules[activeMode];
-  $("#price18").closest("label").hidden = activeMode !== 1;
-  $("#price5").closest("label").hidden = activeMode === 3;
+  $("#total18").closest("label").hidden = activeMode !== 1;
+  $("#total5").closest("label").hidden = activeMode === 3;
 }
 
 function generateImage() {
@@ -381,5 +413,6 @@ $("#resetBtn").addEventListener("click", resetEditor);
 restoreDraft();
 updateLogoUploadVisibility();
 updateModeUI();
+updateInstallmentHints();
 $("#dateLabel").textContent = monthYear();
 renderPoster(false);

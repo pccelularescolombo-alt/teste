@@ -55,9 +55,9 @@
             <div id="pricingRule" class="pricing-rule">Aba 1: apresenta à vista, 5x, 10x e 18x em boxes individuais.</div>
             <div class="grid two prices-grid">
               <label>Valor à vista<div class="money"><span>R$</span><input id="cashPrice" data-field inputmode="decimal" placeholder="Digite o valor"></div></label>
-              <label>Parcela em 5x<div class="money"><span>R$</span><input id="price5" data-field inputmode="decimal" placeholder="Digite o valor"></div></label>
-              <label>Parcela em 10x<div class="money"><span>R$</span><input id="price10" data-field inputmode="decimal" placeholder="Digite o valor"></div></label>
-              <label class="featured-input">Parcela em 18x <em>PRINCIPAL</em><div class="money"><span>R$</span><input id="price18" data-field inputmode="decimal" placeholder="Digite o valor"></div></label>
+              <label>Valor total em 5x<div class="money"><span>R$</span><input id="total5" data-field inputmode="decimal" placeholder="Digite o valor total"></div><small class="calc-hint" id="calc5"></small></label>
+              <label>Valor total em 10x<div class="money"><span>R$</span><input id="total10" data-field inputmode="decimal" placeholder="Digite o valor total"></div><small class="calc-hint" id="calc10"></small></label>
+              <label class="featured-input">Valor total em 18x <em>PRINCIPAL</em><div class="money"><span>R$</span><input id="total18" data-field inputmode="decimal" placeholder="Digite o valor total"></div><small class="calc-hint" id="calc18"></small></label>
             </div>
           </div>
         </details>
@@ -81,9 +81,9 @@
         <details class="form-card">
           <summary><span class="section-number">05</span><span><small>LOGOTIPOS DO SISTEMA</small>Selecione até três marcas</span><i></i></summary>
           <div class="details-body grid two logo-selects">
-            <label class="header-logo-upload">Logotipo principal da loja
+            <label class="header-logo-upload wide">Logotipo principal da loja
               <input id="headerLogo" type="file" accept="image/png,image/jpeg,image/webp">
-              <span><b>Carregar logotipo</b><small>Formato quadrado · 512 × 512</small></span>
+              <span><b>Carregar logotipo</b><small>Formato retangular · ideal 3:1 (ex.: 1200 × 400)</small></span>
               <img id="headerLogoPreview" alt="Prévia do logotipo principal">
             </label>
             <div class="logo-slot">
@@ -102,7 +102,7 @@
                 <img id="logo2UploadPreview" alt="Prévia do logotipo 2">
               </label>
             </div>
-            <p class="logo-help">As três áreas utilizam o padrão quadrado 512 × 512. A opção automática usa o fabricante informado no formulário. Escolha "Minha imagem" para carregar um arquivo do dispositivo nos logotipos 1 e 2.</p>
+            <p class="logo-help">O logotipo principal aparece centralizado no topo, em formato retangular (mantém a proporção original). Os logotipos 1 e 2 utilizam o padrão quadrado 512 × 512. A opção automática usa o fabricante informado no formulário. Escolha "Minha imagem" para carregar um arquivo do dispositivo nos logotipos 1 e 2.</p>
           </div>
         </details>
       </form>
