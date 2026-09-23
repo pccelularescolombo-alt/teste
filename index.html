@@ -20,9 +20,9 @@
       <p class="intro">Pesquise, ajuste os dados e baixe uma imagem pronta para a vitrine.</p>
 
       <nav class="tabs" aria-label="Modelos de destaque">
-        <button class="tab active" data-mode="1" type="button"><b>01</b><span>À vista + 5x, 10x e 18x<small>Todos os valores</small></span></button>
+        <button class="tab active" data-mode="1" type="button" aria-pressed="true"><b>01</b><span>À vista + 5x, 10x e 18x<small>Selecionado</small></span></button>
         <button class="tab" data-mode="2" type="button"><b>02</b><span>À vista, 5x ou 10x<small>Três condições</small></span></button>
-        <button class="tab" data-mode="3" type="button"><b>03</b><span>À vista / 5x ou 10x<small>Totais separados</small></span></button>
+        <button class="tab" data-mode="3" type="button"><b>03</b><span>À vista / 5x ou 10x<small>Duas condições</small></span></button>
       </nav>
 
       <form id="editor" autocomplete="off">
@@ -37,10 +37,10 @@
         <details class="form-card" open>
           <summary><span class="section-number">02</span><span><small>IDENTIFICAÇÃO</small>Dados principais</span><i></i></summary>
           <div class="details-body grid two">
-            <label>Fabricante<input id="manufacturer" data-field type="text" value="Realme"></label>
-            <label>Modelo<input id="model" data-field type="text" value="C71"></label>
-            <label>Armazenamento<input id="storage" data-field type="text" value="128 GB"></label>
-            <label>Memória RAM<input id="ram" data-field type="text" value="4 GB"></label>
+            <label>Fabricante<input id="manufacturer" data-field type="text" placeholder="Ex.: Realme"></label>
+            <label>Modelo<input id="model" data-field type="text" placeholder="Ex.: C71"></label>
+            <label>Armazenamento<input id="storage" data-field type="text" placeholder="Ex.: 128 GB"></label>
+            <label>Memória RAM<input id="ram" data-field type="text" placeholder="Ex.: 4 GB"></label>
           </div>
         </details>
 
@@ -48,16 +48,16 @@
           <summary><span class="section-number">03</span><span><small>CONDIÇÕES COMERCIAIS</small>Garantia e valores</span><i></i></summary>
           <div class="details-body">
             <div class="grid two guarantee-grid">
-              <label>Garantia<input id="warrantyQty" data-field type="number" min="0" value="90"></label>
-              <label>Unidade<select id="warrantyUnit" data-field><option>Dias</option><option>Ano</option><option>Anos</option></select></label>
+              <label>Garantia<input id="warrantyQty" data-field type="number" min="0" placeholder="Ex.: 90"></label>
+              <label>Unidade<select id="warrantyUnit" data-field><option value="" selected>Selecione</option><option>Dias</option><option>Ano</option><option>Anos</option></select></label>
             </div>
             <div class="subsection-label">PREÇOS <span>use vírgula ou ponto</span></div>
-            <div id="pricingRule" class="pricing-rule">Aba 1: apresenta à vista, 5x, 10x e 18x, com o total de cada parcelamento.</div>
+            <div id="pricingRule" class="pricing-rule">Aba 1: apresenta à vista, 5x, 10x e 18x em boxes individuais.</div>
             <div class="grid two prices-grid">
-              <label>Valor à vista<div class="money"><span>R$</span><input id="cashPrice" data-field inputmode="decimal" value="1.199,00"></div></label>
-              <label>Parcela em 5x<div class="money"><span>R$</span><input id="price5" data-field inputmode="decimal" value="239,80"></div></label>
-              <label>Parcela em 10x<div class="money"><span>R$</span><input id="price10" data-field inputmode="decimal" value="129,90"></div></label>
-              <label class="featured-input">Parcela em 18x <em>PRINCIPAL</em><div class="money"><span>R$</span><input id="price18" data-field inputmode="decimal" value="79,90"></div></label>
+              <label>Valor à vista<div class="money"><span>R$</span><input id="cashPrice" data-field inputmode="decimal" placeholder="Digite o valor"></div></label>
+              <label>Parcela em 5x<div class="money"><span>R$</span><input id="price5" data-field inputmode="decimal" placeholder="Digite o valor"></div></label>
+              <label>Parcela em 10x<div class="money"><span>R$</span><input id="price10" data-field inputmode="decimal" placeholder="Digite o valor"></div></label>
+              <label class="featured-input">Parcela em 18x <em>PRINCIPAL</em><div class="money"><span>R$</span><input id="price18" data-field inputmode="decimal" placeholder="Digite o valor"></div></label>
             </div>
           </div>
         </details>
@@ -65,16 +65,16 @@
         <details class="form-card">
           <summary><span class="section-number">04</span><span><small>FICHA TÉCNICA</small>10 especificações</span><i></i></summary>
           <div class="details-body grid two specs-form">
-            <label>1. Condição<select id="condition" data-field><option>Novo</option><option>Semi-novo</option></select></label>
-            <label>2. Display<input id="display" data-field value='6,7" IPS LCD'></label>
-            <label>3. Taxa de atualização<input id="refresh" data-field value="120 Hz"></label>
-            <label>4. Processador<input id="processor" data-field value="Unisoc T7250"></label>
-            <label>5. Memória RAM<input id="specRam" data-field value="4 GB"></label>
-            <label>6. Câmera traseira<input id="rearCamera" data-field value="50 MP"></label>
-            <label>7. Câmera frontal<input id="frontCamera" data-field value="5 MP"></label>
-            <label>8. Android<input id="android" data-field value="Android 15"></label>
-            <label>9. Rede<select id="network" data-field><option>4G</option><option>5G</option></select></label>
-            <label>10. Bateria<input id="battery" data-field value="6.300 mAh"></label>
+            <label>1. Condição<select id="condition" data-field><option value="" selected>Selecione</option><option>Novo</option><option>Semi-novo</option></select></label>
+            <label>2. Display<input id="display" data-field placeholder='Ex.: 6,7" AMOLED'></label>
+            <label>3. Taxa de atualização<input id="refresh" data-field placeholder="Ex.: 120 Hz"></label>
+            <label>4. Processador<input id="processor" data-field placeholder="Ex.: Snapdragon 7 Gen 3"></label>
+            <label>5. Memória RAM<input id="specRam" data-field placeholder="Ex.: 8 GB"></label>
+            <label>6. Câmera traseira<input id="rearCamera" data-field placeholder="Ex.: 50 MP + 8 MP"></label>
+            <label>7. Câmera frontal<input id="frontCamera" data-field placeholder="Ex.: 16 MP"></label>
+            <label>8. Android<input id="android" data-field placeholder="Ex.: Android 15"></label>
+            <label>9. Rede<select id="network" data-field><option value="" selected>Selecione</option><option>4G</option><option>5G</option></select></label>
+            <label>10. Bateria<input id="battery" data-field placeholder="Ex.: 5.000 mAh"></label>
           </div>
         </details>
 
@@ -83,12 +83,12 @@
           <div class="details-body grid two logo-selects">
             <label class="header-logo-upload">Logotipo principal da loja
               <input id="headerLogo" type="file" accept="image/png,image/jpeg,image/webp">
-              <span><b>Carregar logotipo</b><small>PNG, JPG ou WEBP</small></span>
+              <span><b>Carregar logotipo</b><small>Formato quadrado · 512 × 512</small></span>
               <img id="headerLogoPreview" alt="Prévia do logotipo principal">
             </label>
             <label>Logotipo 1<select id="logo1" data-field><option value="anatel">ANATEL</option><option value="auto">Marca do aparelho (automático)</option><option value="store">Logotipo principal da loja</option><option value="none">Nenhum</option></select></label>
             <label>Logotipo 2<select id="logo2" data-field><option value="auto">Marca do aparelho (automático)</option><option value="anatel">ANATEL</option><option value="store">Logotipo principal da loja</option><option value="none">Nenhum</option></select></label>
-            <p class="logo-help">Os logotipos são carregados pelo próprio sistema. A opção automática usa o fabricante informado no formulário.</p>
+            <p class="logo-help">As três áreas utilizam o padrão quadrado 512 × 512. A opção automática usa o fabricante informado no formulário.</p>
           </div>
         </details>
       </form>

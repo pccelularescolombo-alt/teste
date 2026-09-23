@@ -49,10 +49,9 @@ function moneyNumber(input) {
 }
 
 function money(input) {
+  if (String(input ?? "").trim() === "") return "—";
   return moneyNumber(input).toLocaleString("pt-BR", {minimumFractionDigits:2, maximumFractionDigits:2});
 }
-
-function installmentTotal(input, count) { return money(moneyNumber(input) * count); }
 
 function drawImageContain(img, x, y, w, h) {
   const sourceW = img.naturalWidth || img.width, sourceH = img.naturalHeight || img.height;
@@ -92,16 +91,17 @@ function renderPoster(finalMode = false) {
   ctx.strokeStyle = "#1f4ea1"; ctx.lineWidth = 5; ctx.strokeRect(12,12,DESIGN_W-24,DESIGN_H-24);
 
   // Uploaded store logo
-  if (headerLogo) drawImageContain(headerLogo,48,42,500,105);
+  if (headerLogo) drawImageContain(headerLogo,55,34,125,125);
   else {
-    roundedRect(55,55,370,78,8,"#f5f3ed","#c8ced1",2);
-    ctx.fillStyle="#7b868d";ctx.textAlign="center";ctx.font="800 19px sans-serif";ctx.fillText("CARREGUE O LOGOTIPO DA LOJA",240,101);ctx.textAlign="left";
+    roundedRect(55,34,125,125,8,"#f5f3ed","#c8ced1",2);
+    ctx.fillStyle="#7b868d";ctx.textAlign="center";ctx.font="800 14px sans-serif";ctx.fillText("SUA LOGO",117,91);ctx.font="700 11px sans-serif";ctx.fillText("512 × 512",117,111);ctx.textAlign="left";
   }
 
   // Warranty seal
   ctx.save();ctx.translate(760,91);ctx.rotate(.08);ctx.beginPath();ctx.arc(0,0,68,0,Math.PI*2);ctx.fillStyle="#ffad13";ctx.fill();
   ctx.fillStyle="#10202c";ctx.textAlign="center";ctx.font="900 18px sans-serif";ctx.fillText("GARANTIA",0,-12);
-  ctx.font="900 29px sans-serif";ctx.fillText(`${safe(value("warrantyQty"),"0")} ${upper(value("warrantyUnit"))}`,0,22);ctx.restore();ctx.textAlign="left";
+  const warranty=value("warrantyQty")&&value("warrantyUnit")?`${value("warrantyQty")} ${upper(value("warrantyUnit"))}`:"—";
+  ctx.font="900 29px sans-serif";ctx.fillText(warranty,0,22);ctx.restore();ctx.textAlign="left";
 
   const title = upper(`${value("manufacturer")} ${value("model")}`.trim());
   const titleSize = fitText(safe(title,"APARELHO"), 790, 70, "sans-serif", "900");
@@ -128,40 +128,35 @@ function drawCashHeadline(y = 410) {
   const size=fitText(cash,625,100,"sans-serif","900");ctx.font=`900 ${size}px sans-serif`;ctx.fillText(cash,137,y+81);
 }
 
-function drawInstallmentRow(count, priceId, y, highlighted = false) {
-  if (highlighted) roundedRect(70,y-32,760,51,7,"#fff0e8");
-  ctx.fillStyle=highlighted?"#f05a22":"#1f4ea1";ctx.font="900 25px sans-serif";ctx.fillText(`${count}×`,83,y);
-  ctx.fillStyle="#31475b";ctx.font="800 20px sans-serif";ctx.fillText(`de R$ ${money(value(priceId))}`,143,y);
-  ctx.textAlign="right";ctx.fillStyle="#66727c";ctx.font="700 16px sans-serif";ctx.fillText(`VALOR TOTAL: R$ ${installmentTotal(value(priceId),count)}`,811,y);ctx.textAlign="left";
+function drawInstallmentBox(count, price, x, y, w, h, highlighted = false, caption = "") {
+  roundedRect(x,y,w,h,10,highlighted?"#fff0e8":"#f5f3ed",highlighted?"#f05a22":"#d5d9db",highlighted?3:2);
+  ctx.fillStyle=highlighted?"#f05a22":"#1f4ea1";ctx.font="900 35px sans-serif";ctx.fillText(`${count}×`,x+18,y+40);
+  ctx.fillStyle="#65737d";ctx.font="800 14px sans-serif";ctx.fillText("DE",x+19,y+68);
+  const priceText=`R$ ${money(price)}`;
+  const size=fitText(priceText,w-36,44,"sans-serif","900");ctx.fillStyle="#183247";ctx.font=`900 ${size}px sans-serif`;ctx.fillText(priceText,x+18,y+113);
+  if(caption){ctx.fillStyle="#65737d";ctx.font="800 12px sans-serif";ctx.fillText(caption,x+18,y+h-15);}
 }
 
 function drawModeOne() {
   drawCashHeadline(403);
-  roundedRect(55,511,790,203,10,"#f5f3ed","#d9d8d2",2);
-  ctx.fillStyle="#10202c";ctx.font="900 17px sans-serif";ctx.fillText("CONDIÇÕES PARCELADAS",79,542);
-  drawInstallmentRow(5,"price5",581);drawInstallmentRow(10,"price10",635);drawInstallmentRow(18,"price18",689,true);
+  ctx.fillStyle="#10202c";ctx.font="900 17px sans-serif";ctx.fillText("CONDIÇÕES PARCELADAS",57,535);
+  drawInstallmentBox(5,value("price5"),55,552,250,150);
+  drawInstallmentBox(10,value("price10"),325,552,250,150);
+  drawInstallmentBox(18,value("price18"),595,552,250,150,true);
 }
 
 function drawModeTwo() {
   drawCashHeadline(410);
-  roundedRect(55,525,790,189,10,"#f5f3ed","#d9d8d2",2);
-  ctx.fillStyle="#10202c";ctx.font="900 17px sans-serif";ctx.fillText("ESCOLHA UMA CONDIÇÃO PARCELADA",79,559);
-  drawInstallmentRow(5,"price5",613);drawInstallmentRow(10,"price10",681,true);
+  ctx.fillStyle="#10202c";ctx.font="900 17px sans-serif";ctx.fillText("ESCOLHA UMA CONDIÇÃO PARCELADA",57,542);
+  drawInstallmentBox(5,value("price5"),55,560,385,142);
+  drawInstallmentBox(10,value("price10"),460,560,385,142,true);
 }
 
 function drawModeThree() {
-  ctx.fillStyle="#66727c";ctx.font="800 16px sans-serif";ctx.fillText("CONDIÇÃO 1 • MESMO VALOR TOTAL",58,405);
-  roundedRect(55,426,485,288,10,"#f5f3ed","#d9d8d2",2);
-  ctx.fillStyle="#f05a22";ctx.font="900 20px sans-serif";ctx.fillText("À VISTA",78,465);
-  ctx.font="900 30px sans-serif";ctx.fillText("R$",78,517);const cash=money(value("cashPrice"));const cs=fitText(cash,350,60,"sans-serif","900");ctx.font=`900 ${cs}px sans-serif`;ctx.fillText(cash,126,520);
-  ctx.fillStyle="#9aa2a7";ctx.fillRect(78,545,438,2);ctx.textAlign="center";ctx.fillStyle="#1f4ea1";ctx.font="900 17px sans-serif";ctx.fillText("OU",297,575);
-  ctx.textAlign="left";ctx.font="900 31px sans-serif";ctx.fillText("5×",79,623);ctx.fillStyle="#31475b";ctx.font="800 21px sans-serif";ctx.fillText(`DE R$ ${money(moneyNumber(value("cashPrice"))/5)}`,145,623);
-  ctx.fillStyle="#66727c";ctx.font="700 15px sans-serif";ctx.fillText(`VALOR TOTAL: R$ ${cash}`,79,674);
-  ctx.fillStyle="#66727c";ctx.font="800 16px sans-serif";ctx.fillText("CONDIÇÃO 2",573,405);
-  roundedRect(558,426,287,288,10,"#10202c");ctx.fillStyle="#d6f34f";ctx.font="900 18px sans-serif";ctx.fillText("PARCELADO",582,466);
-  ctx.fillStyle="#fff";ctx.font="900 48px sans-serif";ctx.fillText("10×",582,533);ctx.font="800 18px sans-serif";ctx.fillText("DE R$",584,570);
-  const ten=money(value("price10"));const ts=fitText(ten,230,50,"sans-serif","900");ctx.font=`900 ${ts}px sans-serif`;ctx.fillText(ten,582,620);
-  ctx.fillStyle="#aeb9bf";ctx.font="700 14px sans-serif";ctx.fillText("VALOR TOTAL",582,661);ctx.fillStyle="#fff";ctx.font="900 21px sans-serif";ctx.fillText(`R$ ${installmentTotal(value("price10"),10)}`,582,690);ctx.textAlign="left";
+  drawCashHeadline(397);
+  ctx.fillStyle="#10202c";ctx.font="900 17px sans-serif";ctx.fillText("CONDIÇÕES PARCELADAS",57,529);
+  drawInstallmentBox(5,value("cashPrice")?moneyNumber(value("cashPrice"))/5:"",55,546,385,156,false,"MESMO PREÇO DO VALOR À VISTA");
+  drawInstallmentBox(10,value("price10"),460,546,385,156,true,"CONDIÇÃO INDEPENDENTE");
 }
 
 function drawLowerSection(finalMode) {
@@ -178,8 +173,9 @@ function drawLowerSection(finalMode) {
   specs.forEach(([label,text], index) => {
     const y = 831 + index * 39;
     ctx.beginPath();ctx.arc(64,y-6,4,0,Math.PI*2);ctx.fillStyle=index===0?"#f05a22":"#1f4ea1";ctx.fill();
-    ctx.fillStyle="#596873";ctx.font="900 14px sans-serif";ctx.fillText(label,78,y-10);
-    const size = fitText(safe(text),390,24,"sans-serif","800");ctx.fillStyle="#183247";ctx.font=`800 ${size}px sans-serif`;ctx.fillText(safe(text),78,y+14);
+    ctx.fillStyle="#596873";ctx.font="900 19px sans-serif";ctx.fillText(`${label}:`,78,y+4);
+    const offset=ctx.measureText(`${label}:`).width+9;
+    const size=fitText(safe(text),390-offset,28,"sans-serif","800");ctx.fillStyle="#183247";ctx.font=`800 ${size}px sans-serif`;ctx.fillText(safe(text),78+offset,y+4);
     if(index < specs.length-1){ctx.fillStyle="#e7e5df";ctx.fillRect(78,y+20,398,1)}
   });
 
@@ -188,17 +184,17 @@ function drawLowerSection(finalMode) {
   ctx.save();ctx.beginPath();ctx.roundRect(515,792,310,407,16);ctx.clip();
   ctx.fillStyle="#e9edf0";ctx.beginPath();ctx.arc(740,843,150,0,Math.PI*2);ctx.fill();
   ctx.fillStyle="#d6f34f";ctx.beginPath();ctx.arc(799,1102,90,0,Math.PI*2);ctx.fill();
-  roundedRect(535,815,270,158,12,"rgba(255,255,255,.94)","#d5dadd",2);
-  roundedRect(535,994,270,158,12,"rgba(255,255,255,.94)","#d5dadd",2);
-  drawLogo(value("logo1"),542,821,256,146);
-  drawLogo(value("logo2"),542,1000,256,146);
+  roundedRect(580,805,180,180,12,"rgba(255,255,255,.94)","#d5dadd",2);
+  roundedRect(580,1000,180,180,12,"rgba(255,255,255,.94)","#d5dadd",2);
+  drawLogo(value("logo1"),586,811,168,168);
+  drawLogo(value("logo2"),586,1006,168,168);
   ctx.restore();
 
-  roundedRect(557,1163,226,27,3,"#10202c");ctx.fillStyle="#fff";ctx.font="800 11px sans-serif";ctx.fillText("LOGOTIPOS DO SISTEMA",586,1181);
+  roundedRect(586,1160,168,27,3,"#10202c");ctx.fillStyle="#fff";ctx.font="800 10px sans-serif";ctx.fillText("PADRÃO 512 × 512",610,1178);
 
   // Footer
   ctx.fillStyle="#10202c";ctx.fillRect(55,1227,790,2);
-  ctx.font="700 14px sans-serif";ctx.fillStyle="#66727c";ctx.fillText("Destaque válido no mês de emissão • Imagens ilustrativas",56,1263);
+  ctx.font="900 18px sans-serif";ctx.fillStyle="#66727c";ctx.fillText("ÚLTIMA ATUALIZAÇÃO",56,1263);
   ctx.textAlign="right";ctx.fillStyle="#10202c";ctx.font="900 28px sans-serif";ctx.fillText(monthYear(),842,1267);ctx.textAlign="left";
   if (finalMode) {
     ctx.fillStyle="#a8b0b5";ctx.font="700 10px sans-serif";ctx.fillText("GERADO DIGITALMENTE",56,1293);
@@ -216,12 +212,12 @@ function markDirty() {
 function saveDraft() {
   const draft = {activeMode, headerLogoData};
   fieldIds.forEach(id => draft[id] = value(id));
-  try { localStorage.setItem("vitrine18x-draft", JSON.stringify(draft)); } catch (_) {}
+  try { localStorage.setItem("vitrine-manual-v2", JSON.stringify(draft)); } catch (_) {}
 }
 
 function restoreDraft() {
   try {
-    const draft = JSON.parse(localStorage.getItem("vitrine18x-draft") || "null");
+    const draft = JSON.parse(localStorage.getItem("vitrine-manual-v2") || "null");
     if (!draft) return;
     fieldIds.forEach(id => { if (draft[id] !== undefined) $("#" + id).value = draft[id]; });
     if ([1,2,3].includes(Number(draft.activeMode))) activeMode = Number(draft.activeMode);
@@ -240,9 +236,10 @@ function setHeaderLogo(dataUrl, persist = true) {
     headerLogo = img; headerLogoData = dataUrl;
     $("#headerLogoPreview").src = dataUrl;
     $("#headerLogoPreview").parentElement.classList.add("has-image");
-    renderPoster(false);
-    if (persist) { saveDraft(); showToast("Logotipo principal carregado"); }
+    if (persist) { markDirty(); showToast("Logotipo principal carregado"); }
+    else renderPoster(false);
   };
+  img.onerror=()=>showToast("Não foi possível carregar este logotipo");
   img.src = dataUrl;
 }
 
@@ -253,13 +250,17 @@ function handleHeaderLogo(file) {
   reader.onload = () => {
     const source = new Image();
     source.onload = () => {
-      const scale = Math.min(1,1200/source.naturalWidth,360/source.naturalHeight);
-      const temp = document.createElement("canvas");temp.width=Math.max(1,Math.round(source.naturalWidth*scale));temp.height=Math.max(1,Math.round(source.naturalHeight*scale));
-      temp.getContext("2d").drawImage(source,0,0,temp.width,temp.height);
+      const temp=document.createElement("canvas");temp.width=512;temp.height=512;
+      const tempCtx=temp.getContext("2d");
+      const scale=Math.min(472/source.naturalWidth,472/source.naturalHeight);
+      const width=source.naturalWidth*scale,height=source.naturalHeight*scale;
+      tempCtx.drawImage(source,(512-width)/2,(512-height)/2,width,height);
       setHeaderLogo(temp.toDataURL("image/png"));
     };
+    source.onerror=()=>showToast("Arquivo de imagem inválido");
     source.src = reader.result;
   };
+  reader.onerror=()=>showToast("Não foi possível ler o arquivo");
   reader.readAsDataURL(file);
 }
 
@@ -270,11 +271,16 @@ function selectMode(mode) {
 }
 
 function updateModeUI() {
-  document.querySelectorAll(".tab").forEach(tab => tab.classList.toggle("active", Number(tab.dataset.mode) === activeMode));
+  const inactiveLabels={1:"Todos os valores",2:"Três condições",3:"Duas condições"};
+  document.querySelectorAll(".tab").forEach(tab => {
+    const selected=Number(tab.dataset.mode)===activeMode;
+    tab.classList.toggle("active",selected);tab.setAttribute("aria-pressed",String(selected));
+    tab.querySelector("small").textContent=selected?"Selecionado":inactiveLabels[tab.dataset.mode];
+  });
   const rules = {
-    1:"Aba 1: apresenta à vista, 5x, 10x e 18x, informando o valor total de cada parcelamento.",
-    2:"Aba 2: apresenta à vista, 5x ou 10x, com parcela e valor total claramente separados.",
-    3:"Aba 3: à vista e 5x têm o mesmo valor total. A parcela de 5x é calculada automaticamente; 10x pode ter outro total."
+    1:"Aba 1: apresenta à vista, 5x, 10x e 18x em boxes individuais.",
+    2:"Aba 2: apresenta à vista, 5x ou 10x em boxes alinhados.",
+    3:"Aba 3: a parcela de 5x é calculada pelo preço à vista; o valor de 10x permanece independente."
   };
   $("#pricingRule").textContent = rules[activeMode];
   $("#price18").closest("label").hidden = activeMode !== 1;
@@ -304,12 +310,12 @@ function downloadImage() {
 
 function resetEditor() {
   if (!confirm("Deseja restaurar os dados de exemplo?")) return;
-  localStorage.removeItem("vitrine18x-draft"); location.reload();
+  localStorage.removeItem("vitrine-manual-v2");localStorage.removeItem("vitrine18x-draft");location.reload();
 }
 
 fieldIds.forEach(id => $("#" + id).addEventListener("input", markDirty));
 document.querySelectorAll(".tab").forEach(tab => tab.addEventListener("click", () => selectMode(tab.dataset.mode)));
-$("#headerLogo").addEventListener("change", event => handleHeaderLogo(event.target.files[0]));
+$("#headerLogo").addEventListener("change", event => {handleHeaderLogo(event.target.files[0]);event.target.value="";});
 $("#generateBtn").addEventListener("click", generateImage);
 $("#downloadBtn").addEventListener("click", downloadImage);
 $("#resetBtn").addEventListener("click", resetEditor);
