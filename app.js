@@ -209,9 +209,9 @@ function drawLowerSection(finalMode) {
   drawLogo(value("logo2"),2,logoX,logoY2,logoW,logoH);
 
   const specs = [
-    ["CONDIÇÃO", value("condition")], ["DISPLAY", value("display")], ["TAXA DE ATUALIZAÇÃO", value("refresh")],
+    ["CONDIÇÃO", value("condition")], ["DISPLAY", value("display")], ["FPS", value("refresh")],
     ["PROCESSADOR", value("processor")], ["MEMÓRIA RAM", value("ram")],
-    ["CÂMERA TRASEIRA", value("rearCamera")], ["CÂMERA FRONTAL", value("frontCamera")],
+    ["C. TRASEIRA", value("rearCamera")], ["C. FRONTAL", value("frontCamera")],
     ["SISTEMA", value("android")], ["REDE", value("network")], ["BATERIA", value("battery")]
   ];
 
@@ -227,12 +227,13 @@ function drawLowerSection(finalMode) {
   specs.forEach(([label, text], index) => {
     const rowY = sectionTop + index * rowH + rowH * 0.68;
     ctx.beginPath();ctx.arc(colX+5,rowY-rowH*0.28,4,0,Math.PI*2);ctx.fillStyle=index===0?"#f05a22":"#1f4ea1";ctx.fill();
-    ctx.fillStyle="#8a949c";ctx.font="900 15px sans-serif";
     const labelText = `${label}:`;
+    const valueText = safe(text);
+    const size=fitText(`${labelText} ${valueText}`,colW-15,27,"sans-serif","800",18);
+    ctx.fillStyle="#183247";ctx.font=`800 ${size}px sans-serif`;
     ctx.fillText(labelText, colX+15, rowY);
     const labelW = ctx.measureText(labelText).width + 10;
-    const size=fitText(safe(text),colW-labelW-15,27,"sans-serif","800",18);
-    ctx.fillStyle="#183247";ctx.font=`800 ${size}px sans-serif`;ctx.fillText(safe(text),colX+15+labelW,rowY);
+    ctx.fillText(valueText,colX+15+labelW,rowY);
     if(index < rows-1){ctx.fillStyle="#e7e5df";ctx.fillRect(colX+15,sectionTop+(index+1)*rowH-4,colW-15,1.3)}
   });
 
