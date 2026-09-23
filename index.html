@@ -1,256 +1,112 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="pt-BR">
 <head>
-<meta charset="UTF-8">
-<title>Sistema de Películas • Pinheirinho Celulares</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-
-<link rel="stylesheet" href="style.css">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#101820">
+  <title>Vitrine — Gerador de destaques</title>
+  <link rel="stylesheet" href="styles.css">
 </head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#" aria-label="Início"><span class="brand-mark">V</span><span>VITRINE<small>gerador de ofertas</small></span></a>
+    <div class="top-status"><span></span> Salvo neste dispositivo</div>
+  </header>
 
-<body data-theme="light">
+  <main class="app-shell">
+    <section class="workspace" aria-labelledby="page-title">
+      <div class="eyebrow">PAINEL DE CRIAÇÃO <span>01</span></div>
+      <h1 id="page-title">Monte seu destaque<br><em>sem editar uma arte.</em></h1>
+      <p class="intro">Pesquise, ajuste os dados e baixe uma imagem pronta para a vitrine.</p>
 
-<button class="theme-toggle" id="themeToggle" aria-label="Alternar tema">
-  <i class="fas fa-sun"></i>
-  <i class="fas fa-moon"></i>
-</button>
+      <nav class="tabs" aria-label="Modelos de destaque">
+        <button class="tab active" data-mode="1" type="button"><b>01</b><span>À vista + 5x, 10x e 18x<small>Todos os valores</small></span></button>
+        <button class="tab" data-mode="2" type="button"><b>02</b><span>À vista, 5x ou 10x<small>Três condições</small></span></button>
+        <button class="tab" data-mode="3" type="button"><b>03</b><span>À vista / 5x ou 10x<small>Totais separados</small></span></button>
+      </nav>
 
-<button class="painel-toggle" id="painelToggle" aria-label="Abrir ranking de avaliações">
-  <i class="fas fa-ranking-star"></i>
-</button>
+      <form id="editor" autocomplete="off">
+        <section class="form-card manual-card">
+          <div class="section-number">01</div>
+          <div class="section-content">
+            <div class="section-title"><div><span>PREENCHIMENTO MANUAL</span><h2>Informe os dados do aparelho</h2></div><span class="optional">Controle totalmente manual</span></div>
+            <p class="manual-note"><b>Você controla todas as informações.</b> Preencha os campos e acompanhe a arte sendo atualizada automaticamente.</p>
+          </div>
+        </section>
 
-<div class="tabs-container">
-  <button class="tab-button active" onclick="switchTab('pesquisa', this)">
-    <i class="fas fa-search"></i>
-    Pesquisa Adaptações
-  </button>
-  <button class="tab-button" onclick="switchTab('placa', this)">
-    <i class="fas fa-image"></i>
-    Placa Película
-  </button>
-  <button class="tab-button" onclick="switchTab('placa-capa', this)">
-    <i class="fas fa-layer-group"></i>
-    Placa de Capa
-  </button>
-</div>
+        <details class="form-card" open>
+          <summary><span class="section-number">02</span><span><small>IDENTIFICAÇÃO</small>Dados principais</span><i></i></summary>
+          <div class="details-body grid two">
+            <label>Fabricante<input id="manufacturer" data-field type="text" value="Realme"></label>
+            <label>Modelo<input id="model" data-field type="text" value="C71"></label>
+            <label>Armazenamento<input id="storage" data-field type="text" value="128 GB"></label>
+            <label>Memória RAM<input id="ram" data-field type="text" value="4 GB"></label>
+          </div>
+        </details>
 
-<div id="pesquisa" class="tab-content active">
-  <div class="pesquisa-header">
-    <div class="logo-container">
-      <img src="amg/logo.png" alt="Pinheirinho Celulares" class="logo" 
-           onerror="this.style.display='none'; this.parentElement.innerHTML='<h1 style=color:var(--azul)>Pinheirinho Celulares</h1>'">
-    </div>
-    
-    <div class="search-container">
-      <div class="search-wrapper">
-        <input id="busca" type="text" placeholder="Digite o modelo ou marca do celular..." autocomplete="off">
-        <i class="fas fa-search"></i>
+        <details class="form-card" open>
+          <summary><span class="section-number">03</span><span><small>CONDIÇÕES COMERCIAIS</small>Garantia e valores</span><i></i></summary>
+          <div class="details-body">
+            <div class="grid two guarantee-grid">
+              <label>Garantia<input id="warrantyQty" data-field type="number" min="0" value="90"></label>
+              <label>Unidade<select id="warrantyUnit" data-field><option>Dias</option><option>Ano</option><option>Anos</option></select></label>
+            </div>
+            <div class="subsection-label">PREÇOS <span>use vírgula ou ponto</span></div>
+            <div id="pricingRule" class="pricing-rule">Aba 1: apresenta à vista, 5x, 10x e 18x, com o total de cada parcelamento.</div>
+            <div class="grid two prices-grid">
+              <label>Valor à vista<div class="money"><span>R$</span><input id="cashPrice" data-field inputmode="decimal" value="1.199,00"></div></label>
+              <label>Parcela em 5x<div class="money"><span>R$</span><input id="price5" data-field inputmode="decimal" value="239,80"></div></label>
+              <label>Parcela em 10x<div class="money"><span>R$</span><input id="price10" data-field inputmode="decimal" value="129,90"></div></label>
+              <label class="featured-input">Parcela em 18x <em>PRINCIPAL</em><div class="money"><span>R$</span><input id="price18" data-field inputmode="decimal" value="79,90"></div></label>
+            </div>
+          </div>
+        </details>
+
+        <details class="form-card">
+          <summary><span class="section-number">04</span><span><small>FICHA TÉCNICA</small>10 especificações</span><i></i></summary>
+          <div class="details-body grid two specs-form">
+            <label>1. Condição<select id="condition" data-field><option>Novo</option><option>Semi-novo</option></select></label>
+            <label>2. Display<input id="display" data-field value='6,7" IPS LCD'></label>
+            <label>3. Taxa de atualização<input id="refresh" data-field value="120 Hz"></label>
+            <label>4. Processador<input id="processor" data-field value="Unisoc T7250"></label>
+            <label>5. Memória RAM<input id="specRam" data-field value="4 GB"></label>
+            <label>6. Câmera traseira<input id="rearCamera" data-field value="50 MP"></label>
+            <label>7. Câmera frontal<input id="frontCamera" data-field value="5 MP"></label>
+            <label>8. Android<input id="android" data-field value="Android 15"></label>
+            <label>9. Rede<select id="network" data-field><option>4G</option><option>5G</option></select></label>
+            <label>10. Bateria<input id="battery" data-field value="6.300 mAh"></label>
+          </div>
+        </details>
+
+        <details class="form-card">
+          <summary><span class="section-number">05</span><span><small>LOGOTIPOS DO SISTEMA</small>Selecione duas marcas</span><i></i></summary>
+          <div class="details-body grid two logo-selects">
+            <label class="header-logo-upload">Logotipo principal da loja
+              <input id="headerLogo" type="file" accept="image/png,image/jpeg,image/webp">
+              <span><b>Carregar logotipo</b><small>PNG, JPG ou WEBP</small></span>
+              <img id="headerLogoPreview" alt="Prévia do logotipo principal">
+            </label>
+            <label>Logotipo 1<select id="logo1" data-field><option value="anatel">ANATEL</option><option value="auto">Marca do aparelho (automático)</option><option value="store">Logotipo principal da loja</option><option value="none">Nenhum</option></select></label>
+            <label>Logotipo 2<select id="logo2" data-field><option value="auto">Marca do aparelho (automático)</option><option value="anatel">ANATEL</option><option value="store">Logotipo principal da loja</option><option value="none">Nenhum</option></select></label>
+            <p class="logo-help">Os logotipos são carregados pelo próprio sistema. A opção automática usa o fabricante informado no formulário.</p>
+          </div>
+        </details>
+      </form>
+    </section>
+
+    <aside class="preview-panel" aria-label="Pré-visualização">
+      <div class="preview-heading"><div><span>PRÉ-VISUALIZAÇÃO</span><strong>Atualização em tempo real</strong></div><button id="resetBtn" type="button">Recomeçar</button></div>
+      <div class="canvas-wrap"><canvas id="poster" width="1217" height="1772" aria-label="Prévia do destaque"></canvas></div>
+      <div class="preview-meta"><span><b>FORMATO</b> 10,30 × 15,00 cm · 300 DPI</span><span><b>DATA</b> <i id="dateLabel">—</i></span></div>
+      <div class="action-row">
+        <button id="generateBtn" class="btn secondary" type="button">Gerar imagem</button>
+        <button id="downloadBtn" class="btn primary" type="button" disabled>Baixar imagem <span>↓</span></button>
       </div>
-    </div>
-  </div>
+      <p id="actionStatus" class="action-status" role="status">A prévia já reflete seus dados. Gere a versão final para baixar.</p>
+    </aside>
+  </main>
 
-  <div class="container" id="resultado"></div>
-
-  <div class="footer">
-    <div class="footer-content">
-      <span>Desenvolvido por <strong>Mattheus Avilar</strong></span>
-      <span>•</span>
-      <span style="background:linear-gradient(135deg,var(--azul),var(--laranja));-webkit-background-clip:text;-webkit-text-fill-color:transparent">Versão 5.0</span>
-    </div>
-  </div>
-</div>
-
-<div id="placa" class="tab-content">
-  <div class="placa-container">
-    <div class="topo-fixo">
-      <h2>
-        <i class="fas fa-palette"></i>
-        Placa Película
-      </h2>
-
-      <div class="select-container">
-        <select id="fabricante">
-          <option value="">Fabricante</option>
-        </select>
-
-        <select id="modelo" disabled>
-          <option value="">Modelo</option>
-        </select>
-
-        <button class="btn-gerar" onclick="gerarImagemPelicula()">
-          <i class="fas fa-wand-magic-sparkles"></i>
-          Gerar
-        </button>
-
-        <button class="btn-download" onclick="baixarImagemPelicula()">
-          <i class="fas fa-download"></i>
-          Baixar
-        </button>
-      </div>
-    </div>
-
-    <div class="area-canvas">
-      <div class="canvas-wrapper">
-        <canvas id="canvas" width="591" height="591"></canvas>
-        <p style="margin-top: 15px; font-size: 13px; color: var(--text-muted); font-weight: 500;">
-          <i class="fas fa-ruler-combined"></i> Tamanho de saída: 591x591px (5x5 cm a 300 DPI)
-        </p>
-      </div>
-    </div>
-  </div>
-</div>
-
-<div id="placa-capa" class="tab-content">
-  <div class="placa-container">
-    <div class="topo-fixo">
-      <h2>
-        <i class="fas fa-layer-group"></i>
-        Placa de Capa
-      </h2>
-
-      <div class="select-container" style="flex-wrap: wrap; gap: 10px; justify-content: center;">
-        <select id="fabricanteCapa" style="flex: 1; min-width: 150px; max-width: 200px;">
-          <option value="">Fabricante</option>
-        </select>
-
-        <input type="text" id="linha1Capa" class="input-modelo" placeholder="Linha 1 do modelo" maxlength="30" style="flex: 1; min-width: 150px; max-width: 200px;">
-        <input type="text" id="linha2Capa" class="input-modelo" placeholder="Linha 2 do modelo" maxlength="30" style="flex: 1; min-width: 150px; max-width: 200px;">
-        <input type="text" id="linha3Capa" class="input-modelo" placeholder="Linha 3 do modelo" maxlength="30" style="flex: 1; min-width: 150px; max-width: 200px;">
-
-        <button class="btn-gerar" onclick="gerarImagemCapa()" style="flex: 0 0 auto; min-width: 110px;">
-          <i class="fas fa-wand-magic-sparkles"></i>
-          Gerar
-        </button>
-
-        <button class="btn-download" onclick="baixarImagemCapa()" style="flex: 0 0 auto; min-width: 110px;">
-          <i class="fas fa-download"></i>
-          Baixar
-        </button>
-      </div>
-    </div>
-
-    <div class="area-canvas">
-      <div class="canvas-wrapper">
-        <canvas id="canvasCapa" width="591" height="591"></canvas>
-        <p style="margin-top: 15px; font-size: 13px; color: var(--text-muted); font-weight: 500;">
-          <i class="fas fa-ruler-combined"></i> Tamanho de saída: 591x591px (5x5 cm a 300 DPI)
-        </p>
-      </div>
-    </div>
-  </div>
-</div>
-
-<div class="painel-overlay" id="painelOverlay">
-  <div class="painel-modal">
-    <div class="painel-header">
-      <h2><i class="fas fa-ranking-star"></i> Ranking de avaliações das lojas</h2>
-      <button type="button" class="painel-fechar" id="painelFechar" aria-label="Fechar painel">
-        <i class="fas fa-xmark"></i>
-      </button>
-    </div>
-
-    <div class="painel-admin-area">
-      <button type="button" class="btn-admin" id="painelAdminBtn">
-        <i class="fas fa-user-lock"></i>
-        Adicionar / editar modelo
-      </button>
-    </div>
-
-    <div class="painel-ordenar">
-      <span>Ordenar por:</span>
-      <button type="button" class="ativo" data-ordem="deslikes"><i class="fas fa-thumbs-down"></i> Mais deslikes</button>
-      <button type="button" data-ordem="likes"><i class="fas fa-thumbs-up"></i> Mais likes</button>
-    </div>
-
-    <p class="painel-legenda">
-      Adaptações marcadas como <strong>"Removida do site"</strong> já somem
-      automaticamente da busca (por terem passado do limite de reprovação).
-      As demais continuam visíveis — use esta lista pra decidir manualmente
-      se alguma outra deve ser removida do catálogo.
-    </p>
-
-    <div id="painelCorpo" class="painel-corpo"></div>
-  </div>
-</div>
-
-<!-- Login do admin (usuário e senha), pra liberar o cadastro de modelo -->
-<div class="painel-overlay" id="loginOverlay">
-  <div class="painel-modal login-modal">
-    <div class="painel-header">
-      <h2><i class="fas fa-lock"></i> Acesso restrito</h2>
-      <button type="button" class="painel-fechar" id="loginFechar" aria-label="Fechar">
-        <i class="fas fa-xmark"></i>
-      </button>
-    </div>
-
-    <p class="painel-legenda">Digite o usuário e a senha para adicionar ou editar um modelo no sistema.</p>
-
-    <div class="admin-form-group">
-      <label class="admin-label" for="loginUsuario">Usuário</label>
-      <input type="text" id="loginUsuario" class="admin-input" autocomplete="off">
-    </div>
-    <div class="admin-form-group">
-      <label class="admin-label" for="loginSenha">Senha</label>
-      <input type="password" id="loginSenha" class="admin-input" autocomplete="off">
-    </div>
-
-    <p class="admin-erro" id="loginErro" style="display:none;">Usuário ou senha incorretos.</p>
-
-    <div class="admin-acoes">
-      <button type="button" class="btn-cancelar" id="loginCancelar">Cancelar</button>
-      <button type="button" class="btn-salvar" id="loginEntrar"><i class="fas fa-right-to-bracket"></i> Entrar</button>
-    </div>
-  </div>
-</div>
-
-<!-- Formulário de cadastro/edição de modelo e adaptações -->
-<div class="painel-overlay" id="adminOverlay">
-  <div class="painel-modal admin-modal">
-    <div class="painel-header">
-      <h2><i class="fas fa-mobile-screen-button"></i> Adicionar / editar modelo</h2>
-      <button type="button" class="painel-fechar" id="adminFechar" aria-label="Fechar">
-        <i class="fas fa-xmark"></i>
-      </button>
-    </div>
-
-    <div class="admin-form-group">
-      <label class="admin-label" for="adminModelo">Modelo (digite pra buscar um já cadastrado ou criar um novo)</label>
-      <input type="text" id="adminModelo" class="admin-input" autocomplete="off" placeholder="Ex: iPhone 16e">
-      <div class="admin-sugestoes" id="adminModeloSugestoes"></div>
-    </div>
-
-    <div class="admin-form-group">
-      <label class="admin-label" for="adminMarca">Marca</label>
-      <select id="adminMarca" class="admin-input"></select>
-      <input type="text" id="adminNovaMarca" class="admin-input" placeholder="Digite o nome da nova marca" style="display:none; margin-top:8px;">
-    </div>
-
-    <div class="admin-form-group">
-      <label class="admin-label" for="adminAdaptacao">Adaptações compatíveis (busque e adicione quantas quiser)</label>
-      <input type="text" id="adminAdaptacao" class="admin-input" autocomplete="off" placeholder="Digite o nome de outro modelo já cadastrado...">
-      <div class="admin-sugestoes" id="adminAdaptSugestoes"></div>
-      <div class="admin-chips-lista" id="adminChipsLista"></div>
-    </div>
-
-    <p class="admin-erro" id="adminErro" style="display:none;"></p>
-    <p class="admin-sucesso" id="adminSucesso" style="display:none;"><i class="fas fa-circle-check"></i> Modelo salvo! Ele já aparece na pesquisa.</p>
-
-    <div class="admin-acoes">
-      <button type="button" class="btn-cancelar" id="adminCancelar">Cancelar</button>
-      <button type="button" class="btn-salvar" id="adminSalvar"><i class="fas fa-floppy-disk"></i> Salvar</button>
-    </div>
-  </div>
-</div>
-
-<!-- Firebase (banco de dados dos likes/deslikes das adaptações) -->
-<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
-
-<script src="script.js"></script>
-
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="app.js"></script>
 </body>
 </html>
