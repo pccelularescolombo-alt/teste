@@ -84,13 +84,11 @@ function drawLogo(type, slot, x, y, w, h) {
     ctx.strokeStyle="#2f65ad";ctx.beginPath();ctx.arc(-25,15,38,-1.25,1.25);ctx.stroke();
     ctx.fillStyle="#2ea85e";ctx.textAlign="center";ctx.font="italic 900 28px sans-serif";ctx.fillText("ANATEL",0,76);
   } else if (type === "store") {
-    roundedRect(x + 10,y + 18,w - 20,h - 36,12,"#fff","#cdd3d6",2);
-    if (headerLogo) drawImageContain(headerLogo,x+22,y+29,w-44,h-58);
+    if (headerLogo) drawImageContain(headerLogo,x,y,w,h);
     else {ctx.fillStyle="#7b868d";ctx.textAlign="center";ctx.font="800 17px sans-serif";ctx.fillText("LOGOTIPO DA LOJA",x+w/2,y+h/2+6);}
   } else if (type === "custom") {
     const img = slot === 1 ? logo1Image : logo2Image;
-    roundedRect(x + 10,y + 18,w - 20,h - 36,12,"#fff","#cdd3d6",2);
-    if (img) drawImageContain(img,x+22,y+29,w-44,h-58);
+    if (img) drawImageContain(img,x,y,w,h);
     else {ctx.fillStyle="#7b868d";ctx.textAlign="center";ctx.font="800 17px sans-serif";ctx.fillText("SUA IMAGEM",x+w/2,y+h/2+6);}
   } else {
     const brand = safe(value("manufacturer"), "MARCA");
@@ -195,7 +193,6 @@ function drawModeThree() {
 function drawLowerSection(finalMode) {
   ctx.fillStyle="#10202c";ctx.fillRect(55,746,790,4);
   ctx.font="900 21px sans-serif";ctx.fillStyle="#f05a22";ctx.fillText("FICHA TÉCNICA",56,789);
-  ctx.fillStyle="#7a858d";ctx.font="700 13px sans-serif";ctx.fillText("INFORMAÇÕES DO APARELHO",224,788);
 
   const specs = [
     ["CONDIÇÃO", value("condition")], ["DISPLAY", value("display")], ["TELA", value("refresh")],
@@ -211,18 +208,9 @@ function drawLowerSection(finalMode) {
     if(index < specs.length-1){ctx.fillStyle="#e7e5df";ctx.fillRect(78,rowY+32,398,1)}
   });
 
-  // System logo zone
-  roundedRect(515,792,310,407,16,"#f4f6f6");
-  ctx.save();ctx.beginPath();ctx.roundRect(515,792,310,407,16);ctx.clip();
-  ctx.fillStyle="#e9edf0";ctx.beginPath();ctx.arc(740,843,150,0,Math.PI*2);ctx.fill();
-  ctx.fillStyle="#d6f34f";ctx.beginPath();ctx.arc(799,1102,90,0,Math.PI*2);ctx.fill();
-  roundedRect(580,805,180,180,12,"rgba(255,255,255,.94)","#d5dadd",2);
-  roundedRect(580,1000,180,180,12,"rgba(255,255,255,.94)","#d5dadd",2);
+  // Zona de logotipos (sem fundo, sem caixas e sem tarja)
   drawLogo(value("logo1"),1,586,811,168,168);
   drawLogo(value("logo2"),2,586,1006,168,168);
-  ctx.restore();
-
-  roundedRect(586,1160,168,27,3,"#10202c");ctx.fillStyle="#fff";ctx.font="800 10px sans-serif";ctx.fillText("PADRÃO 512 × 512",610,1178);
 
   // Footer
   ctx.fillStyle="#10202c";ctx.fillRect(55,1227,790,2);
