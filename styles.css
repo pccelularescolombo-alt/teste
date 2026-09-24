@@ -51,7 +51,7 @@ label{font-size:10px;text-transform:uppercase;letter-spacing:.09em;font-weight:9
 .dashboard-title em{color:var(--blue);font-weight:400;font-style:italic}
 .dashboard-shell .intro{margin-bottom:44px}
 .dashboard-grid{display:grid;grid-template-columns:1fr 1fr;gap:22px;width:100%}
-.dash-card{position:relative;text-align:left;background:rgba(255,255,255,.82);border:1px solid var(--line);border-radius:7px;box-shadow:0 7px 24px rgba(16,32,44,.04);padding:30px 26px;display:flex;flex-direction:column;gap:10px;min-height:230px;overflow:hidden;transition:.2s}
+.dash-card{position:relative;text-align:left;text-decoration:none;color:inherit;background:rgba(255,255,255,.82);border:1px solid var(--line);border-radius:7px;box-shadow:0 7px 24px rgba(16,32,44,.04);padding:30px 26px;display:flex;flex-direction:column;gap:10px;min-height:230px;overflow:hidden;transition:.2s}
 .dash-card:not(.disabled):hover{border-color:var(--ink);transform:translateY(-3px);box-shadow:0 16px 36px rgba(16,32,44,.12)}
 .dash-num{font:italic 26px Georgia,serif;color:var(--orange)}
 .dash-card h2{font:500 25px Georgia,serif;margin:0;line-height:1.12;color:var(--ink)}

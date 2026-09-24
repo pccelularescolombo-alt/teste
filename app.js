@@ -1,25 +1,6 @@
 "use strict";
 
 const $ = (selector) => document.querySelector(selector);
-
-// Navegação entre o dashboard inicial e o editor de destaque
-function showEditor() {
-  $("#dashboardView").hidden = true;
-  $("#editorView").hidden = false;
-}
-function showDashboard() {
-  $("#editorView").hidden = true;
-  $("#dashboardView").hidden = false;
-}
-$("#optSmartphone").addEventListener("click", showEditor);
-$("#optOutros").addEventListener("click", (event) => {
-  event.preventDefault();
-  showToast("Em desenvolvimento — em breve novidades por aqui!");
-});
-$("#brandHome").addEventListener("click", (event) => {
-  event.preventDefault();
-  showDashboard();
-});
 const canvas = $("#poster");
 const ctx = canvas.getContext("2d");
 const W = canvas.width, H = canvas.height;

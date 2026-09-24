@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#101820">
+  <title>Vitrine — Gerador de destaques</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="index.html" id="brandHome" aria-label="Voltar ao painel"><span class="brand-mark">V</span><span>VITRINE<small>gerador de ofertas</small></span></a>
+    <div class="top-actions">
+      <button id="historyBtn" class="history-btn" type="button" aria-haspopup="dialog">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/><path d="M12 7v5l3 2"/></svg>
+        Histórico
+      </button>
+      <div class="top-status"><span></span> Salvo neste dispositivo</div>
+    </div>
+  </header>
+
+  <main id="editorView" class="app-shell">
+    <section class="workspace" aria-labelledby="page-title">
+      <div class="eyebrow">PAINEL DE CRIAÇÃO <span>01</span></div>
+      <h1 id="page-title">Monte seu destaque<br><em>sem editar uma arte.</em></h1>
+      <p class="intro">Pesquise, ajuste os dados e baixe uma imagem pronta para a vitrine.</p>
+
+      <nav class="tabs" aria-label="Modelos de destaque">
+        <button class="tab active" data-mode="1" type="button" aria-pressed="true"><b>01</b><span>À vista + 5x, 10x e 18x<small>Selecionado</small></span></button>
+        <button class="tab" data-mode="2" type="button"><b>02</b><span>À vista, 5x ou 10x<small>Três condições</small></span></button>
+        <button class="tab" data-mode="3" type="button"><b>03</b><span>À vista / 5x ou 10x<small>Duas condições</small></span></button>
+      </nav>
+
+      <form id="editor" autocomplete="off">
+        <section class="form-card manual-card">
+          <div class="section-number">01</div>
+          <div class="section-content">
+            <div class="section-title"><div><span>PREENCHIMENTO MANUAL</span><h2>Informe os dados do aparelho</h2></div><span class="optional">Controle totalmente manual</span></div>
+            <p class="manual-note"><b>Você controla todas as informações.</b> Preencha os campos e acompanhe a arte sendo atualizada automaticamente.</p>
+          </div>
+        </section>
+
+        <details class="form-card" open>
+          <summary><span class="section-number">02</span><span><small>IDENTIFICAÇÃO</small>Dados principais</span><i></i></summary>
+          <div class="details-body grid two">
+            <label>Fabricante<input id="manufacturer" data-field type="text" placeholder="Ex.: Realme"></label>
+            <label>Modelo<input id="model" data-field type="text" placeholder="Ex.: C71"></label>
+            <label>Armazenamento<input id="storage" data-field type="text" placeholder="Ex.: 128 GB"></label>
+            <label>Memória RAM<input id="ram" data-field type="text" placeholder="Ex.: 4 GB"></label>
+          </div>
+        </details>
+
+        <details class="form-card" open>
+          <summary><span class="section-number">03</span><span><small>CONDIÇÕES COMERCIAIS</small>Garantia e valores</span><i></i></summary>
+          <div class="details-body">
+            <div class="grid two guarantee-grid">
+              <label>Garantia<input id="warrantyQty" data-field type="number" min="0" placeholder="Ex.: 90"></label>
+              <label>Unidade<select id="warrantyUnit" data-field><option value="" selected>Selecione</option><option>Dias</option><option>Ano</option><option>Anos</option></select></label>
+            </div>
+            <div class="subsection-label">PREÇOS <span>use vírgula ou ponto</span></div>
+            <div id="pricingRule" class="pricing-rule">Aba 1: apresenta à vista, 5x, 10x e 18x em boxes individuais.</div>
+            <div class="grid two prices-grid">
+              <label>Valor à vista<div class="money"><span>R$</span><input id="cashPrice" data-field inputmode="decimal" placeholder="Digite o valor"></div></label>
+              <label>Valor total em 5x<div class="money"><span>R$</span><input id="total5" data-field inputmode="decimal" placeholder="Digite o valor total"></div><small class="calc-hint" id="calc5"></small></label>
+              <label>Valor total em 10x<div class="money"><span>R$</span><input id="total10" data-field inputmode="decimal" placeholder="Digite o valor total"></div><small class="calc-hint" id="calc10"></small></label>
+              <label class="featured-input">Valor total em 18x <em>PRINCIPAL</em><div class="money"><span>R$</span><input id="total18" data-field inputmode="decimal" placeholder="Digite o valor total"></div><small class="calc-hint" id="calc18"></small></label>
+            </div>
+          </div>
+        </details>
+
+        <details class="form-card">
+          <summary><span class="section-number">04</span><span><small>FICHA TÉCNICA</small>9 especificações</span><i></i></summary>
+          <div class="details-body grid two specs-form">
+            <p class="logo-help" style="grid-column:1/-1;margin-bottom:2px">A <b>Memória RAM</b> já foi informada em <b>Dados principais</b> e é usada automaticamente aqui.</p>
+            <label>1. Condição<input id="condition" data-field placeholder="Ex.: Novo" /></label>
+            <label>2. Display<input id="display" data-field placeholder='Ex.: 6,7" AMOLED'></label>
+            <label>3. Taxa de atualização<input id="refresh" data-field placeholder="Ex.: 120 Hz"></label>
+            <label>4. Processador<input id="processor" data-field placeholder="Ex.: Snapdragon 7 Gen 3"></label>
+            <label>5. Câmera traseira<input id="rearCamera" data-field placeholder="Ex.: 50 MP + 8 MP"></label>
+            <label>6. Câmera frontal<input id="frontCamera" data-field placeholder="Ex.: 16 MP"></label>
+            <label>7. Bateria<input id="battery" data-field placeholder="Ex.: 5.000 mAh"></label>
+          </div>
+        </details>
+
+        <details class="form-card">
+          <summary><span class="section-number">05</span><span><small>LOGOTIPOS DO SISTEMA</small>Carregue até três imagens</span><i></i></summary>
+          <div class="details-body grid two logo-selects">
+            <label class="header-logo-upload wide">Logotipo principal da loja
+              <input id="headerLogo" type="file" accept="image/png,image/jpeg,image/webp">
+              <span><b>Carregar logotipo</b><small>Formato retangular · ideal 3:1 (ex.: 1200 × 400)</small></span>
+              <img id="headerLogoPreview" alt="Prévia do logotipo principal">
+            </label>
+            <div class="logo-slot">
+              <label>Logotipo 1</label>
+              <label class="header-logo-upload small" id="logo1UploadField">Imagem do Logotipo 1
+                <input id="logo1Upload" type="file" accept="image/png,image/jpeg,image/webp">
+                <span><b>Carregar imagem</b><small>Formato quadrado · 512 × 512</small></span>
+                <img id="logo1UploadPreview" alt="Prévia do logotipo 1">
+              </label>
+            </div>
+            <div class="logo-slot">
+              <label>Logotipo 2</label>
+              <label class="header-logo-upload small" id="logo2UploadField">Imagem do Logotipo 2
+                <input id="logo2Upload" type="file" accept="image/png,image/jpeg,image/webp">
+                <span><b>Carregar imagem</b><small>Formato quadrado · 512 × 512</small></span>
+                <img id="logo2UploadPreview" alt="Prévia do logotipo 2">
+              </label>
+            </div>
+            <p class="logo-help">O logotipo principal aparece centralizado no topo, em formato retangular (mantém a proporção original). Os logotipos 1 e 2 utilizam o padrão quadrado 512 × 512 e são carregados diretamente do seu dispositivo.</p>
+          </div>
+        </details>
+      </form>
+    </section>
+
+    <aside class="preview-panel" aria-label="Pré-visualização">
+      <div class="preview-heading"><div><span>PRÉ-VISUALIZAÇÃO</span><strong>Atualização em tempo real</strong></div><button id="resetBtn" type="button">Recomeçar</button></div>
+      <div class="canvas-wrap"><canvas id="poster" width="1825" height="2657" aria-label="Prévia do destaque"></canvas></div>
+      <div class="preview-meta"><span><b>FORMATO</b> 10,30 × 15,00 cm · 450 DPI</span><span><b>DATA</b> <i id="dateLabel">—</i></span></div>
+      <div class="action-row">
+        <button id="generateBtn" class="btn secondary" type="button">Gerar imagem</button>
+        <button id="downloadBtn" class="btn primary" type="button" disabled>Baixar imagem <span>↓</span></button>
+      </div>
+      <p id="actionStatus" class="action-status" role="status">A prévia já reflete seus dados. Gere a versão final para baixar.</p>
+    </aside>
+  </main>
+
+  <div id="historyOverlay" class="history-overlay"></div>
+  <aside id="historyPanel" class="history-panel" role="dialog" aria-modal="true" aria-labelledby="historyTitle" aria-hidden="true">
+    <div class="history-head">
+      <div><span class="history-eyebrow">HISTÓRICO</span><h2 id="historyTitle">Modelos editados</h2></div>
+      <div class="history-tools">
+        <button id="historyRefresh" class="icon-btn" type="button" aria-label="Atualizar lista" title="Atualizar lista">↻</button>
+        <button id="historyClose" class="icon-btn" type="button" aria-label="Fechar histórico" title="Fechar">×</button>
+      </div>
+    </div>
+    <div class="history-search"><input id="historySearch" type="search" placeholder="Buscar por modelo, marca, mês ou ano…" autocomplete="off" aria-label="Buscar no histórico"></div>
+    <p id="historyStatus" class="history-status" role="status"></p>
+    <ul id="historyList" class="history-list"></ul>
+  </aside>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+  <script src="app.js"></script>
+  <script src="history.js"></script>
+</body>
+</html>
