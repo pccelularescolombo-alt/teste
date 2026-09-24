@@ -365,6 +365,49 @@ function handleLogoUpload(slot, file) {
   reader.readAsDataURL(file);
 }
 
+// ---------- Dados do modelo (usados pelo histórico) ----------
+function collectData() {
+  const data = {activeMode};
+  fieldIds.forEach(id => data[id] = value(id));
+  return data;
+}
+
+function getLogoData() {
+  return {header: headerLogoData, logo1: logo1ImageData, logo2: logo2ImageData};
+}
+
+// kind: "header" | 1 | 2. Sem dataUrl, limpa o logotipo.
+function applyLogoData(kind, dataUrl) {
+  const preview = $(kind === "header" ? "#headerLogoPreview" : `#logo${kind}UploadPreview`);
+  const set = (img, data) => {
+    if (kind === "header") { headerLogo = img; headerLogoData = data; }
+    else if (kind === 1) { logo1Image = img; logo1ImageData = data; }
+    else { logo2Image = img; logo2ImageData = data; }
+    if (data) { preview.src = data; preview.parentElement.classList.add("has-image"); }
+    else { preview.removeAttribute("src"); preview.parentElement.classList.remove("has-image"); }
+  };
+  return new Promise(resolve => {
+    if (!dataUrl) { set(null, ""); resolve(); return; }
+    const img = new Image();
+    img.onload = () => { set(img, dataUrl); resolve(); };
+    img.onerror = () => { set(null, ""); resolve(); };
+    img.src = dataUrl;
+  });
+}
+
+// Preenche o formulário com um modelo salvo (campos + modelo de destaque + logotipos).
+async function applyModelData(data, logos = {}) {
+  fieldIds.forEach(id => { $("#" + id).value = data[id] ?? ""; });
+  activeMode = [1,2,3].includes(Number(data.activeMode)) ? Number(data.activeMode) : 1;
+  await Promise.all([
+    applyLogoData("header", logos.header || ""),
+    applyLogoData(1, logos.logo1 || ""),
+    applyLogoData(2, logos.logo2 || "")
+  ]);
+  updateModeUI();
+  markDirty();
+}
+
 function selectMode(mode) {
   activeMode = Number(mode);
   updateModeUI(); markDirty();
@@ -399,7 +442,22 @@ function generateImage() {
     generatedUrl = URL.createObjectURL(blob); $("#downloadBtn").disabled = false;
     $("#actionStatus").textContent = "Imagem final pronta em alta resolução.";
     showToast("Imagem gerada com sucesso");
+    saveToHistory();
   }, "image/png", 1);
+}
+
+// Salva automaticamente o modelo no histórico (Firebase) sempre que a imagem é gerada.
+function saveToHistory() {
+  if (!window.VitrineHistory) return;
+  $("#actionStatus").textContent = "Imagem final pronta. Salvando no histórico…";
+  window.VitrineHistory.saveCurrent().then(result => {
+    if (generatedUrl) {
+      $("#actionStatus").textContent = result.ok
+        ? "Imagem final pronta e salva no histórico."
+        : "Imagem final pronta, mas não foi salva no histórico.";
+    }
+    showToast(result.ok ? (result.message || "Imagem gerada e salva no histórico") : result.message);
+  });
 }
 
 function downloadImage() {

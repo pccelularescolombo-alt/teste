@@ -10,7 +10,13 @@
 <body>
   <header class="topbar">
     <a class="brand" href="#" aria-label="Início"><span class="brand-mark">V</span><span>VITRINE<small>gerador de ofertas</small></span></a>
-    <div class="top-status"><span></span> Salvo neste dispositivo</div>
+    <div class="top-actions">
+      <button id="historyBtn" class="history-btn" type="button" aria-haspopup="dialog">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/><path d="M12 7v5l3 2"/></svg>
+        Histórico
+      </button>
+      <div class="top-status"><span></span> Salvo neste dispositivo</div>
+    </div>
   </header>
 
   <main class="app-shell">
@@ -118,7 +124,24 @@
     </aside>
   </main>
 
+  <div id="historyOverlay" class="history-overlay"></div>
+  <aside id="historyPanel" class="history-panel" role="dialog" aria-modal="true" aria-labelledby="historyTitle" aria-hidden="true">
+    <div class="history-head">
+      <div><span class="history-eyebrow">HISTÓRICO</span><h2 id="historyTitle">Modelos editados</h2></div>
+      <div class="history-tools">
+        <button id="historyRefresh" class="icon-btn" type="button" aria-label="Atualizar lista" title="Atualizar lista">↻</button>
+        <button id="historyClose" class="icon-btn" type="button" aria-label="Fechar histórico" title="Fechar">×</button>
+      </div>
+    </div>
+    <div class="history-search"><input id="historySearch" type="search" placeholder="Buscar por modelo, marca, mês ou ano…" autocomplete="off" aria-label="Buscar no histórico"></div>
+    <p id="historyStatus" class="history-status" role="status"></p>
+    <ul id="historyList" class="history-list"></ul>
+  </aside>
+
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
   <script src="app.js"></script>
+  <script src="history.js"></script>
 </body>
 </html>
