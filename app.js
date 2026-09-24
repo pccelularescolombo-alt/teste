@@ -8,7 +8,7 @@ const DESIGN_W = 900, DESIGN_H = 1311;
 // Área do logotipo principal (topo, centralizado, retangular ~3:1)
 const HEADER_LOGO = {w:420, h:135, x:(DESIGN_W-420)/2, y:30};
 
-const fieldIds = ["manufacturer","model","storage","ram","warrantyQty","warrantyUnit","cashPrice","total5","total10","total18","condition","display","refresh","processor","rearCamera","frontCamera","android","network","battery","logo1","logo2"];
+const fieldIds = ["manufacturer","model","storage","ram","warrantyQty","warrantyUnit","cashPrice","total5","total10","total18","condition","display","refresh","processor","rearCamera","frontCamera","android","network","battery"];
 let generatedUrl = "";
 let toastTimer;
 let activeMode = 1;
@@ -205,8 +205,8 @@ function drawLowerSection(finalMode) {
   const logoX = 845 - logoW;
   const logoY1 = sectionTop + (sectionBottom - sectionTop - logoH * 2) / 2;
   const logoY2 = logoY1 + logoH;
-  drawLogo(value("logo1"),1,logoX,logoY1,logoW,logoH);
-  drawLogo(value("logo2"),2,logoX,logoY2,logoW,logoH);
+  drawLogo("custom",1,logoX,logoY1,logoW,logoH);
+  drawLogo("custom",2,logoX,logoY2,logoW,logoH);
 
   const specs = [
     ["CONDIÇÃO", value("condition")], ["DISPLAY", value("display")], ["FPS", value("refresh")],
@@ -287,7 +287,6 @@ function restoreDraft() {
     if (draft.headerLogoData) setHeaderLogo(draft.headerLogoData, false);
     if (draft.logo1ImageData) setLogoImage(1, draft.logo1ImageData, false);
     if (draft.logo2ImageData) setLogoImage(2, draft.logo2ImageData, false);
-    updateLogoUploadVisibility();
   } catch (_) {}
 }
 
@@ -366,13 +365,6 @@ function handleLogoUpload(slot, file) {
   reader.readAsDataURL(file);
 }
 
-function updateLogoUploadVisibility() {
-  [1, 2].forEach(slot => {
-    const isCustom = value(`logo${slot}`) === "custom";
-    $(`#logo${slot}UploadField`).hidden = !isCustom;
-  });
-}
-
 function selectMode(mode) {
   activeMode = Number(mode);
   updateModeUI(); markDirty();
@@ -427,14 +419,11 @@ document.querySelectorAll(".tab").forEach(tab => tab.addEventListener("click", (
 $("#headerLogo").addEventListener("change", event => {handleHeaderLogo(event.target.files[0]);event.target.value="";});
 $("#logo1Upload").addEventListener("change", event => {handleLogoUpload(1, event.target.files[0]);event.target.value="";});
 $("#logo2Upload").addEventListener("change", event => {handleLogoUpload(2, event.target.files[0]);event.target.value="";});
-$("#logo1").addEventListener("change", updateLogoUploadVisibility);
-$("#logo2").addEventListener("change", updateLogoUploadVisibility);
 $("#generateBtn").addEventListener("click", generateImage);
 $("#downloadBtn").addEventListener("click", downloadImage);
 $("#resetBtn").addEventListener("click", resetEditor);
 
 restoreDraft();
-updateLogoUploadVisibility();
 updateModeUI();
 updateInstallmentHints();
 $("#dateLabel").textContent = monthYear();
