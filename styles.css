@@ -64,7 +64,7 @@ label{font-size:10px;text-transform:uppercase;letter-spacing:.09em;font-weight:9
 
 /* histórico */
 .top-actions{display:flex;align-items:center;gap:22px}
-.history-btn{display:inline-flex;align-items:center;gap:8px;height:38px;padding:0 15px;border:1px solid var(--ink);background:transparent;color:var(--ink);border-radius:3px;font-size:10px;font-weight:900;letter-spacing:.12em;text-transform:uppercase}.history-btn svg{width:15px;height:15px}.history-btn:hover{background:var(--ink);color:#fff}
+.history-btn{display:inline-flex;align-items:center;gap:8px;height:38px;padding:0 15px;border:1px solid var(--ink);background:transparent;color:var(--ink);border-radius:3px;font-size:10px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;text-decoration:none}.history-btn svg{width:15px;height:15px}.history-btn:hover{background:var(--ink);color:#fff}
 .history-overlay{position:fixed;inset:0;background:rgba(16,32,44,.5);opacity:0;pointer-events:none;transition:opacity .25s;z-index:50}.history-overlay.open{opacity:1;pointer-events:auto}
 .history-panel{position:fixed;top:0;right:0;bottom:0;width:min(480px,100vw);background:#fbfaf6;border-left:1px solid var(--line);box-shadow:var(--shadow);z-index:60;display:flex;flex-direction:column;transform:translateX(100%);visibility:hidden;transition:transform .28s ease,visibility 0s .28s}.history-panel.open{transform:none;visibility:visible;transition:transform .28s ease}
 .history-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:22px 22px 14px}.history-eyebrow{font-size:9px;font-weight:900;letter-spacing:.15em;color:var(--orange)}.history-head h2{font:500 26px Georgia,serif;margin:4px 0 0}.history-tools{display:flex;gap:8px}
