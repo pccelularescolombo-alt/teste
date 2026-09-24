@@ -8,7 +8,7 @@ const DESIGN_W = 900, DESIGN_H = 1311;
 // Área do logotipo principal (topo, centralizado, retangular ~3:1)
 const HEADER_LOGO = {w:420, h:135, x:(DESIGN_W-420)/2, y:30};
 
-const fieldIds = ["manufacturer","model","storage","ram","warrantyQty","warrantyUnit","cashPrice","total5","total10","total18","condition","display","refresh","processor","rearCamera","frontCamera","android","network","battery"];
+const fieldIds = ["manufacturer","model","storage","ram","warrantyQty","warrantyUnit","cashPrice","total5","total10","total18","condition","display","refresh","processor","rearCamera","frontCamera","battery"];
 let generatedUrl = "";
 let toastTimer;
 let activeMode = 1;
@@ -212,7 +212,7 @@ function drawLowerSection(finalMode) {
     ["CONDIÇÃO", value("condition")], ["DISPLAY", value("display")], ["FPS", value("refresh")],
     ["PROCESSADOR", value("processor")], ["MEMÓRIA RAM", value("ram")],
     ["C. TRASEIRA", value("rearCamera")], ["C. FRONTAL", value("frontCamera")],
-    ["SISTEMA", value("android")], ["REDE", value("network")], ["BATERIA", value("battery")]
+    ["BATERIA", value("battery")]
   ];
 
   // Coluna única com rótulo e valor na mesma linha, ocupando toda a largura
@@ -224,8 +224,8 @@ function drawLowerSection(finalMode) {
   const rows = specs.length;
   const rowH = (sectionBottom - sectionTop) / rows;
 
-  const pillH = rowH * 0.62;
-  const pillFont = Math.round(pillH * 0.46);
+  const pillH = rowH * 0.66;
+  const pillFont = Math.round(pillH * 0.48);
   ctx.font = `900 ${pillFont}px sans-serif`;
   const pillPadX = pillH * 0.42;
   const pillW = Math.max(...specs.map(([label]) => ctx.measureText(label).width)) + pillPadX * 2;
@@ -238,13 +238,13 @@ function drawLowerSection(finalMode) {
     ctx.fillText(label, pillX + pillW / 2, rowCenterY + pillFont * 0.34);
     ctx.textAlign = "left";
 
-    const valueX = pillX + pillW + 18;
+    const valueX = pillX + pillW + 22;
     const valueMaxW = colW - (valueX - colX);
-    const size = fitText(safe(text), valueMaxW, 27, "sans-serif", "800", 18);
+    const size = fitText(safe(text), valueMaxW, 34, "sans-serif", "800", 22);
     ctx.fillStyle = "#183247"; ctx.font = `800 ${size}px sans-serif`;
     ctx.fillText(safe(text), valueX, rowCenterY + size * 0.34);
 
-    if (index < rows - 1) { ctx.fillStyle = "#e7e5df"; ctx.fillRect(colX, sectionTop + (index + 1) * rowH - 2, colW, 1.3); }
+    if (index < rows - 1) { ctx.fillStyle = "#e7e5df"; ctx.fillRect(colX, sectionTop + (index + 1) * rowH - 2, colW, 1.5); }
   });
 
   // Footer
