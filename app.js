@@ -224,17 +224,27 @@ function drawLowerSection(finalMode) {
   const rows = specs.length;
   const rowH = (sectionBottom - sectionTop) / rows;
 
+  const pillH = rowH * 0.62;
+  const pillFont = Math.round(pillH * 0.46);
+  ctx.font = `900 ${pillFont}px sans-serif`;
+  const pillPadX = pillH * 0.42;
+  const pillW = Math.max(...specs.map(([label]) => ctx.measureText(label).width)) + pillPadX * 2;
+
   specs.forEach(([label, text], index) => {
-    const rowY = sectionTop + index * rowH + rowH * 0.68;
-    ctx.beginPath();ctx.arc(colX+5,rowY-rowH*0.28,4,0,Math.PI*2);ctx.fillStyle=index===0?"#f05a22":"#1f4ea1";ctx.fill();
-    const labelText = `${label}:`;
-    const valueText = safe(text);
-    const size=fitText(`${labelText} ${valueText}`,colW-15,27,"sans-serif","800",18);
-    ctx.fillStyle="#183247";ctx.font=`800 ${size}px sans-serif`;
-    ctx.fillText(labelText, colX+15, rowY);
-    const labelW = ctx.measureText(labelText).width + 10;
-    ctx.fillText(valueText,colX+15+labelW,rowY);
-    if(index < rows-1){ctx.fillStyle="#e7e5df";ctx.fillRect(colX+15,sectionTop+(index+1)*rowH-4,colW-15,1.3)}
+    const rowCenterY = sectionTop + index * rowH + rowH / 2;
+    const pillX = colX, pillY = rowCenterY - pillH / 2;
+    roundedRect(pillX, pillY, pillW, pillH, pillH / 2, "#f05a22");
+    ctx.fillStyle = "#fff"; ctx.textAlign = "center"; ctx.font = `900 ${pillFont}px sans-serif`;
+    ctx.fillText(label, pillX + pillW / 2, rowCenterY + pillFont * 0.34);
+    ctx.textAlign = "left";
+
+    const valueX = pillX + pillW + 18;
+    const valueMaxW = colW - (valueX - colX);
+    const size = fitText(safe(text), valueMaxW, 27, "sans-serif", "800", 18);
+    ctx.fillStyle = "#183247"; ctx.font = `800 ${size}px sans-serif`;
+    ctx.fillText(safe(text), valueX, rowCenterY + size * 0.34);
+
+    if (index < rows - 1) { ctx.fillStyle = "#e7e5df"; ctx.fillRect(colX, sectionTop + (index + 1) * rowH - 2, colW, 1.3); }
   });
 
   // Footer
