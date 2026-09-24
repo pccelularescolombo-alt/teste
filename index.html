@@ -9,7 +9,7 @@
 </head>
 <body>
   <header class="topbar">
-    <a class="brand" href="#" aria-label="Início"><span class="brand-mark">V</span><span>VITRINE<small>gerador de ofertas</small></span></a>
+    <a class="brand" href="#" id="brandHome" aria-label="Início"><span class="brand-mark">V</span><span>VITRINE<small>gerador de ofertas</small></span></a>
     <div class="top-actions">
       <button id="historyBtn" class="history-btn" type="button" aria-haspopup="dialog">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/><path d="M12 7v5l3 2"/></svg>
@@ -19,7 +19,29 @@
     </div>
   </header>
 
-  <main class="app-shell">
+  <main id="dashboardView" class="dashboard-shell">
+    <div class="dashboard-inner">
+      <div class="eyebrow">PAINEL <span>00</span></div>
+      <h1 class="dashboard-title">Gerador de<br><em>Destaque.</em></h1>
+      <p class="intro">Escolha o tipo de destaque que deseja gerar.</p>
+      <div class="dashboard-grid">
+        <button id="optSmartphone" class="dash-card" type="button">
+          <span class="dash-num">01</span>
+          <h2>Destaque<br>SmartPhone</h2>
+          <p>Monte a arte com preços, condições de pagamento e ficha técnica.</p>
+          <span class="dash-cta">Começar <i>→</i></span>
+        </button>
+        <button id="optOutros" class="dash-card disabled" type="button" aria-disabled="true">
+          <span class="dash-num">02</span>
+          <h2>Destaque Outros<br>Produtos</h2>
+          <p>Novos modelos de destaque para outras categorias de produto.</p>
+          <span class="dash-badge">Em desenvolvimento</span>
+        </button>
+      </div>
+    </div>
+  </main>
+
+  <main id="editorView" class="app-shell" hidden>
     <section class="workspace" aria-labelledby="page-title">
       <div class="eyebrow">PAINEL DE CRIAÇÃO <span>01</span></div>
       <h1 id="page-title">Monte seu destaque<br><em>sem editar uma arte.</em></h1>

@@ -44,6 +44,24 @@ label{font-size:10px;text-transform:uppercase;letter-spacing:.09em;font-weight:9
 @media(max-width:560px){.top-status{font-size:0}.top-status:after{content:"SALVO";font-size:9px}.topbar{padding:0 17px}.brand{font-size:14px}.brand-mark{width:34px;height:34px}h1{font-size:43px}.intro{font-size:15px}.tabs{display:flex;overflow-x:auto;padding-bottom:4px}.tab{min-width:156px}.tab.active{min-width:110px}section.form-card{padding:19px 16px;gap:12px}.section-title{display:block}.optional{display:block;padding-top:6px}.grid.two{grid-template-columns:1fr}.prices-grid{grid-template-columns:1fr 1fr!important}.details-body{padding:3px 16px 20px}.details-body.grid.two{grid-template-columns:1fr}.guarantee-grid{grid-template-columns:1fr 1fr!important}details.form-card summary{padding:17px 16px;gap:12px}.uploads{grid-template-columns:1fr 1fr}.upload-box{height:130px}.preview-panel{padding:12px;margin-left:-2px;margin-right:-2px}.canvas-wrap{padding:8px}.action-row{grid-template-columns:1fr}.btn{height:48px}}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
 
+/* dashboard inicial */
+.dashboard-shell{max-width:980px;margin:0 auto;padding:min(14vh,120px) clamp(20px,4vw,64px) 80px;display:flex;justify-content:center}
+.dashboard-inner{width:100%;text-align:center;display:flex;flex-direction:column;align-items:center}
+.dashboard-title{font-family:Georgia,"Times New Roman",serif;font-size:clamp(40px,6vw,68px);line-height:.98;letter-spacing:-.045em;margin:18px 0 14px;font-weight:500}
+.dashboard-title em{color:var(--blue);font-weight:400;font-style:italic}
+.dashboard-shell .intro{margin-bottom:44px}
+.dashboard-grid{display:grid;grid-template-columns:1fr 1fr;gap:22px;width:100%}
+.dash-card{position:relative;text-align:left;background:rgba(255,255,255,.82);border:1px solid var(--line);border-radius:7px;box-shadow:0 7px 24px rgba(16,32,44,.04);padding:30px 26px;display:flex;flex-direction:column;gap:10px;min-height:230px;overflow:hidden;transition:.2s}
+.dash-card:not(.disabled):hover{border-color:var(--ink);transform:translateY(-3px);box-shadow:0 16px 36px rgba(16,32,44,.12)}
+.dash-num{font:italic 26px Georgia,serif;color:var(--orange)}
+.dash-card h2{font:500 25px Georgia,serif;margin:0;line-height:1.12;color:var(--ink)}
+.dash-card p{margin:0;color:var(--muted);font-size:13px;line-height:1.5;flex:1}
+.dash-cta{margin-top:auto;font-size:10px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:var(--ink);display:inline-flex;align-items:center;gap:6px}
+.dash-cta i{font-style:normal;transition:.2s}.dash-card:not(.disabled):hover .dash-cta i{transform:translateX(4px)}
+.dash-card.disabled{cursor:not-allowed;opacity:.62;background:rgba(255,255,255,.55)}
+.dash-badge{margin-top:auto;align-self:flex-start;font-size:9px;font-weight:900;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);background:#eceae2;border:1px solid var(--line);padding:6px 10px;border-radius:20px}
+@media(max-width:640px){.dashboard-grid{grid-template-columns:1fr}.dashboard-shell{padding-top:min(9vh,64px)}}
+
 /* histórico */
 .top-actions{display:flex;align-items:center;gap:22px}
 .history-btn{display:inline-flex;align-items:center;gap:8px;height:38px;padding:0 15px;border:1px solid var(--ink);background:transparent;color:var(--ink);border-radius:3px;font-size:10px;font-weight:900;letter-spacing:.12em;text-transform:uppercase}.history-btn svg{width:15px;height:15px}.history-btn:hover{background:var(--ink);color:#fff}

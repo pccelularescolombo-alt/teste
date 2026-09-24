@@ -1,6 +1,25 @@
 "use strict";
 
 const $ = (selector) => document.querySelector(selector);
+
+// Navegação entre o dashboard inicial e o editor de destaque
+function showEditor() {
+  $("#dashboardView").hidden = true;
+  $("#editorView").hidden = false;
+}
+function showDashboard() {
+  $("#editorView").hidden = true;
+  $("#dashboardView").hidden = false;
+}
+$("#optSmartphone").addEventListener("click", showEditor);
+$("#optOutros").addEventListener("click", (event) => {
+  event.preventDefault();
+  showToast("Em desenvolvimento — em breve novidades por aqui!");
+});
+$("#brandHome").addEventListener("click", (event) => {
+  event.preventDefault();
+  showDashboard();
+});
 const canvas = $("#poster");
 const ctx = canvas.getContext("2d");
 const W = canvas.width, H = canvas.height;
@@ -462,7 +481,12 @@ function saveToHistory() {
 
 function downloadImage() {
   if (!generatedUrl) return;
-  const name = [value("manufacturer"), value("model"), value("storage"), `modelo-${activeMode}`].filter(Boolean).join("-").replace(/\s+/g,"-").replace(/[^\wÀ-ÿ-]/g,"");
+  const now = new Date();
+  const meses = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+  const mes = meses[now.getMonth()];
+  const ano = now.getFullYear();
+  const hora = `${String(now.getHours()).padStart(2,"0")}h${String(now.getMinutes()).padStart(2,"0")}`;
+  const name = [value("manufacturer"), value("model"), value("storage"), value("ram"), mes, ano, hora].filter(Boolean).join("-").replace(/\s+/g,"-").replace(/[^\wÀ-ÿ-]/g,"");
   const link = document.createElement("a"); link.href = generatedUrl; link.download = `${name || "destaque"}.png`; document.body.append(link); link.click(); link.remove();
   showToast("Download iniciado");
 }
